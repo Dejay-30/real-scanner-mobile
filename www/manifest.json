@@ -1,0 +1,35 @@
+{
+  "name": "Real Fixtures Scanner — Live Odds +EV",
+  "short_name": "Real Scanner",
+  "description": "Real-time football fixtures + live odds scanner — Poisson true odds vs bookie price. No virtuals.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#070A13",
+  "theme_color": "#00E676",
+  "orientation": "portrait-primary",
+  "categories": ["sports", "entertainment"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Capture Fixtures",
+      "url": "/",
+      "description": "Capture real fixtures and scan for value",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

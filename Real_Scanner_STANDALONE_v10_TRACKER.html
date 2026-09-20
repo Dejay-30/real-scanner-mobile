@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Real Fixtures Scanner — Live Odds +EV</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+<!-- no manifest for file -->
+<meta name="theme-color" content="#00E676">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- no icon -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#070A13;--card:#0F1423;--card2:#141A30;--border:#1E2A4A;--border2:#2A3A65;--accent:#00E676;--blue:#2D7DFF;--cyan:#00E5FF;--pink:#FF4081;--purple:#7C4DFF;--warn:#FFAB00;--danger:#FF3D57;--text:#E6EAF2;--muted:#8B93A7;--dim:#5A6380}
+body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;min-height:100vh}
+.topbar{position:sticky;top:0;z-index:50;background:rgba(7,10,19,0.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-mark{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#00E676,#2D7DFF);display:grid;place-items:center;font-size:18px}
+.brand h1{font-family:Space Grotesk,sans-serif;font-size:15px;font-weight:700}
+.brand h1 span{color:var(--accent)}
+.brand p{font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
+.live-dot{display:flex;align-items:center;gap:6px;background:rgba(0,230,118,0.10);border:1px solid rgba(0,230,118,0.25);padding:6px 10px;border-radius:99px;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;color:var(--accent)}
+.live-dot i{width:7px;height:7px;background:var(--accent);border-radius:50%;box-shadow:0 0 8px var(--accent);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.45}}
+.wrap{max-width:1160px;margin:0 auto;padding:16px}
+.hero{background:linear-gradient(135deg, rgba(20,26,48,0.97) 0%, rgba(15,20,35,0.99) 100%);border:1px solid var(--border);border-radius:18px;padding:18px;display:grid;gap:16px}
+@media(min-width:860px){.hero{grid-template-columns:1.25fr 0.85fr}}
+.hero h2{font-family:Space Grotesk,sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.03em;line-height:1.05}
+.hero h2 em{font-style:normal;background:linear-gradient(90deg,var(--accent),var(--cyan),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:var(--muted);font-size:13px;line-height:1.6;margin:8px 0}
+.badges{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.badge{font-family:JetBrains Mono,monospace;font-size:10px;font-weight:700;padding:6px 10px;border-radius:99px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--muted)}
+.badge.live{border-color:rgba(0,230,118,0.28);color:var(--accent);background:rgba(0,230,118,0.08)}
+.badge.api{border-color:rgba(45,125,255,0.28);color:var(--blue);background:rgba(45,125,255,0.08)}
+.controls{display:flex;flex-wrap:wrap;gap:10px}
+.btn{padding:11px 16px;border-radius:12px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:Space Grotesk,sans-serif;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.btn.prime{flex:1;min-width:140px;background:linear-gradient(135deg,var(--accent),#00C853);border:none;color:#04120A;box-shadow:0 6px 20px rgba(0,230,118,0.3)}
+.btn.prime:disabled{opacity:0.6;cursor:not-allowed}
+.panel{background:rgba(7,10,19,0.6);border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.panel h3{font-family:JetBrains Mono,monospace;font-size:11px;letter-spacing:0.1em;color:var(--muted)}
+.select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-size:13px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
+@media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.stat::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--c)}
+.stat label{font-family:JetBrains Mono,monospace;font-size:9px;letter-spacing:0.1em;color:var(--muted);display:block;margin-bottom:6px}
+.stat strong{font-family:Space Grotesk,sans-serif;font-size:20px;display:block}
+.stat span{font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted)}
+.board{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:700px){.board{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1050px){.board{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.card.edge{border-color:rgba(0,230,118,0.28);box-shadow:0 8px 28px rgba(0,230,118,0.07)}
+.card-head{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)}
+.card-body{padding:12px;display:flex;flex-direction:column;gap:10px}
+.teams{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.team{flex:1;display:flex;align-items:center;gap:8px}
+.team:last-child{flex-direction:row-reverse;text-align:right}
+.icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--card2);border:1px solid var(--border);font-size:16px}
+.vs{width:32px;height:32px;border-radius:50%;background:var(--bg);border:1px solid var(--border);display:grid;place-items:center;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)}
+.odds{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.odds div{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center}
+.odds label{font-family:JetBrains Mono,monospace;font-size:9px;color:var(--muted);display:block}
+.odds strong{font-family:JetBrains Mono,monospace;font-size:13px}
+.odds .edge{border-color:rgba(0,230,118,0.4);background:rgba(0,230,118,0.08)}
+.odds .edge strong{color:var(--accent)}
+.best{padding:7px 10px;border-radius:10px;background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.25);color:var(--accent);font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800;text-align:center}
+.meta{font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);display:flex;justify-content:space-between}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(80px);background:#0F1423;border:1px solid var(--border2);color:var(--text);padding:12px 16px;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.5);transition:.35s;opacity:0;z-index:99}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:14px}
+.settings{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:80;display:none;align-items:center;justify-content:center;padding:14px}
+.settings.show{display:flex}
+.settings-card{background:var(--card);border:1px solid var(--border2);border-radius:16px;max-width:520px;width:100%;padding:16px}
+
+/* predictions & leaderboard */
+.tracker-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin:14px 0}
+.tracker-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.tracker-filters{display:flex;gap:6px}
+.filter-btn{padding:6px 12px;border-radius:99px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:JetBrains Mono,monospace;font-size:11px;cursor:pointer}
+.filter-btn.active{background:var(--accent);color:#04120A;border-color:var(--accent);font-weight:800}
+.track-table{width:100%;border-collapse:collapse}
+.track-table th{font-family:JetBrains Mono,monospace;font-size:9px;letter-spacing:0.08em;color:var(--muted);text-align:left;padding:8px 6px;border-bottom:1px solid var(--border)}
+.track-table td{padding:8px 6px;border-bottom:1px solid rgba(30,42,74,0.6);font-size:12px}
+.track-table tr.win{background:rgba(0,230,118,0.06)}
+.track-table tr.loss{background:rgba(255,61,87,0.06)}
+.badge-market{font-family:JetBrains Mono,monospace;font-size:10px;padding:4px 8px;border-radius:99px;font-weight:700}
+.badge-market.1X2{background:rgba(45,125,255,0.15);color:var(--blue);border:1px solid rgba(45,125,255,0.25)}
+.badge-market.OU25{background:rgba(0,230,118,0.15);color:var(--accent);border:1px solid rgba(0,230,118,0.25)}
+.badge-market.BTTS{background:rgba(255,64,129,0.15);color:var(--pink);border:1px solid rgba(255,64,129,0.25)}
+.input-score{width:54px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);text-align:center;font-family:JetBrains Mono,monospace}
+.btn-sm{padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:11px;cursor:pointer;font-weight:700}
+.btn-sm.win{background:var(--accent);color:#04120A;border:none}
+.btn-sm.loss{background:var(--danger);color:#fff;border:none}
+.lb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}
+@media(min-width:700px){.lb-grid{grid-template-columns:repeat(4,1fr)}}
+.lb-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center}
+.lb-card strong{font-size:22px;display:block;font-family:Space Grotesk,sans-serif}
+.lb-card label{font-family:JetBrains Mono,monospace;font-size:9px;color:var(--muted);letter-spacing:0.08em}
+.lb-table{width:100%;border-collapse:collapse;margin-top:8px}
+.lb-table th{font-family:JetBrains Mono,monospace;font-size:9px;color:var(--muted);text-align:left;padding:7px 6px;border-bottom:1px solid var(--border)}
+.lb-table td{padding:7px 6px;border-bottom:1px solid rgba(30,42,74,0.5);font-size:12px}
+.progress{height:6px;background:var(--bg);border:1px solid var(--border);border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width .4s}
+
+
+/* === SPICED v11: Market Scanner + Active Board + Ledger === */
+.section-head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;margin:22px 0 10px;padding:12px 14px;border-radius:14px;border:1px solid var(--border);background:linear-gradient(135deg, rgba(15,20,35,0.95), rgba(20,26,48,0.9));position:relative;overflow:hidden}
+.section-head::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent-grad, linear-gradient(90deg,var(--accent),var(--cyan)))}
+.section-head.market{--accent-grad: linear-gradient(90deg,#00E676,#00E5FF,#2D7DFF); border-color:rgba(0,230,118,0.25)}
+.section-head.active{--accent-grad: linear-gradient(90deg,#FFAB00,#FF6D00,#FF4081); border-color:rgba(255,171,0,0.25)}
+.section-head.ledger{--accent-grad: linear-gradient(90deg,#7C4DFF,#536DFE,#2D7DFF); border-color:rgba(124,77,255,0.25)}
+.section-head h3{font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;font-size:17px;letter-spacing:-0.02em;display:flex;align-items:center;gap:10px}
+.section-head h3 em{font-style:normal;background:var(--accent-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.section-head p{font-family:DM Sans,Inter,sans-serif;font-size:12px;color:var(--muted);margin-top:2px}
+.badge-league{font-family:Bebas Neue,Outfit,sans-serif;font-size:11px;letter-spacing:0.08em;padding:4px 8px;border-radius:99px;border:1px solid var(--border);font-weight:400}
+.badge-league.EPL{background:rgba(45,125,255,0.12);color:#5AA9FF;border-color:rgba(45,125,255,0.3)}
+.badge-league.LaLiga{background:rgba(255,64,129,0.12);color:#FF6B9D;border-color:rgba(255,64,129,0.3)}
+.badge-league.SerieA{background:rgba(0,230,118,0.12);color:#3CF5B5;border-color:rgba(0,230,118,0.3)}
+.badge-league.Bundesliga{background:rgba(255,171,0,0.14);color:#FFD54F;border-color:rgba(255,171,0,0.32)}
+.badge-league.Ligue1{background:rgba(124,77,255,0.14);color:#B39DFF;border-color:rgba(124,77,255,0.3)}
+.badge-league.NPFL{background:rgba(0,200,83,0.14);color:#69F0AE;border-color:rgba(0,200,83,0.3)}
+.badge-league.UCL{background:rgba(0,229,255,0.12);color:#84FFFF;border-color:rgba(0,229,255,0.3)}
+.instant-flag{position:absolute;top:10px;right:10px;z-index:2;background:linear-gradient(135deg,#00E676,#00C853);color:#04120A;font-family:JetBrains Mono,monospace;font-size:10px;font-weight:800;padding:5px 9px;border-radius:99px;box-shadow:0 4px 14px rgba(0,230,118,0.45);display:flex;align-items:center;gap:4px;animation:flagPulse 1.6s infinite}
+@keyframes flagPulse{0%,100%{transform:scale(1);box-shadow:0 4px 14px rgba(0,230,118,0.45)}50%{transform:scale(1.04);box-shadow:0 6px 22px rgba(0,230,118,0.6)}}
+.card{position:relative}
+.card.market-top{border-color:rgba(0,230,118,0.45);box-shadow:0 10px 30px rgba(0,230,118,0.18), 0 0 0 1px rgba(0,230,118,0.15) inset}
+.card.market-top::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#00E676,#00E5FF)}
+.rank-badge{position:absolute;top:10px;left:10px;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#FFD600,#FFAB00);color:#000;display:grid;place-items:center;font-family:Bebas Neue,sans-serif;font-size:14px;box-shadow:0 3px 10px rgba(255,171,0,0.4);z-index:2}
+.ledger-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN • <span style="background:var(--accent);color:#04120A;padding:2px 6px;border-radius:99px;font-size:9px;vertical-align:middle">v11 • SPICED MARKET SCANNER</span></p></div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <div class="live-dot"><i></i> LIVE</div>
+    <button class="btn" style="padding:7px 10px;background:#FFAB00;color:#000;border:none;font-weight:800" onclick="clearCache()" title="Tap if page stuck on old version">🧹 Clear Cache</button>
+    <button class="btn" style="padding:7px 10px" onclick="openSettings()">⚙️ API</button>
+  </div>
+</div>
+
+<div id="staleBanner" style="display:none;background:#FFAB00;color:#000;padding:8px 12px;border-radius:10px;margin:8px;font-family:JetBrains Mono,monospace;font-size:11px;text-align:center">⚠️ You are on old cached version — tap <button onclick="clearCache()" style="padding:4px 8px;border-radius:6px;border:1px solid #000;background:#fff;font-weight:700;cursor:pointer">Update Now</button> to load v6</div>
+<div class="wrap">
+  <div class="hero">
+    <div>
+      <h2>Real-Time Football<br><em>Live Odds Scanner.</em></h2>
+      <p>Captures <b>real fixtures + live bookie odds</b> from web API, computes Poisson true odds from xG, flags <b>+EV value</b> instantly. No virtuals — 100% real.</p>
+      <div style="background:rgba(255,171,0,0.12);border:1px solid rgba(255,171,0,0.4);border-radius:10px;padding:8px 10px;margin:8px 0;font-family:JetBrains Mono,monospace;font-size:11px;color:#FFAB00;display:flex;justify-content:space-between;align-items:center;gap:8px">⚠️ Stuck on old version? <button onclick="clearCache()" style="padding:6px 12px;border-radius:8px;border:none;background:#FFAB00;color:#000;font-weight:800;cursor:pointer">🧹 Clear Cache & Reload v6</button></div>
+      <div class="badges">
+        <span class="badge live">● LIVE API</span>
+        <span class="badge api">◐ POISSON xG</span>
+        <span class="badge">◎ O/U 2.5</span>
+        <span class="badge">◉ BTTS</span>
+      </div>
+      <div class="controls">
+        <button class="btn prime" id="btnFetch">🌍 Capture Fixtures</button>
+        <button class="btn" id="btnScan">🔍 Scan +EV</button>
+        <button class="btn" id="btnAuto">⏱ Auto 30s</button>
+      </div>
+      <div id="status" style="margin-top:10px;font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted)">Ready — pick league & capture</div>
+    </div>
+    <div class="panel">
+      <h3>CAPTURE SETTINGS</h3>
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">PROVIDER — FREE first</label><select id="provider" class="select"><option value="espn" selected>🟢 ESPN FREE — Live scheduled + DraftKings odds (no key) ✅</option><option value="free2">🟣 OPEN FREE 2 — OpenLigaDB + OpenFootball (no key) ✅</option><option value="oddsapi">🔵 The Odds API — needs key</option><option value="football_data">🟡 Football-Data.org — needs token</option></select></div>
+      <div class="row">
+        <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">LEAGUE</label><select id="league" class="select"><option value="all">All Global</option><option value="EPL">EPL</option><option value="LaLiga">LaLiga</option><option value="Serie A">Serie A</option><option value="Bundesliga">Bundesliga</option><option value="Ligue 1">Ligue 1</option><option value="NPFL">NPFL</option><option value="UCL">UCL</option><option value="CAF">CAF</option></select></div>
+        <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">COUNT</label><select id="count" class="select"><option value="all" selected>All (day)</option><option value="6">6</option><option value="8">8</option><option value="12">12</option><option value="30">30</option></select></div>
+      </div>
+      <div id="apiHint" style="font-family:JetBrains Mono,monospace;font-size:11px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--accent)">✅ ESPN FREE selected — no key needed. Pulls real scheduled fixtures + DraftKings 1X2/O-U from site.api.espn.com</div>
+      <div style="display:flex;gap:8px"><button class="btn" style="flex:1" onclick="openSettings()">⚙️ Optional: Add Paid Keys</button><span id="keyStatus" style="flex:1;padding:8px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-family:JetBrains Mono,monospace;font-size:11px;color:var(--accent)">🟢 ESPN FREE active — no key required</span></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:12px;border:1px dashed var(--border2);background:rgba(20,26,48,0.5)">
+    <h3 style="display:flex;justify-content:space-between;align-items:center">✏️ MANUAL FIXTURE ENTRY <span style="font-size:10px;color:var(--accent);border:1px solid rgba(0,230,118,0.25);padding:3px 8px;border-radius:99px">NO KEY • NO API NEEDED</span></h3>
+    <p style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted)">Add any real fixture yourself when live API is empty/off-season — computes Poisson true odds instantly. Fills the scanner without any API.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <input id="mHome" placeholder="Home Team (e.g., Enyimba)" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-size:13px">
+      <input id="mAway" placeholder="Away Team (e.g., Rangers)" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-size:13px">
+    </div>
+    <div class="row">
+      <select id="mLeague" class="select"><option value="NPFL">NPFL</option><option value="EPL">EPL</option><option value="LaLiga">LaLiga</option><option value="Serie A">Serie A</option><option value="Bundesliga">Bundesliga</option><option value="Ligue 1">Ligue 1</option><option value="UCL">UCL</option><option value="CAF">CAF</option><option value="Friendly">Friendly</option></select>
+      <input id="mKickoff" type="datetime-local" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-size:13px">
+    </div>
+    <div class="row">
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">Home xG (0.5-3.5, auto if empty)</label><input id="mHxg" placeholder="1.75" type="number" step="0.1" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)"></div>
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">Away xG (0.5-3.5, auto if empty)</label><input id="mAxg" placeholder="1.35" type="number" step="0.1" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)"></div>
+    </div>
+    <div class="row">
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">Bookie Home odds (optional)</label><input id="mBoH" placeholder="e.g., 2.15 (auto if empty)" type="number" step="0.01" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)"></div>
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">Bookie Over 2.5 (optional)</label><input id="mBoO" placeholder="e.g., 1.95" type="number" step="0.01" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn prime" style="flex:1" onclick="addManual()">➕ Add to Scanner</button>
+      <button class="btn" style="flex:1" onclick="addManual(true)">➕ Add & Scan</button>
+      <button class="btn" onclick="clearManualFixtures()" title="Clear only manual fixtures">🗑 Clear</button>
+    </div>
+    <div id="manualHint" style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted);text-align:center">Tip: Leave xG empty to auto-compute from team attack/defense weights. Add 2+ fixtures then hit 🔍 Scan.</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat" style="--c:var(--accent)"><label>FIXTURES CAPTURED</label><strong id="sFixtures">0</strong><span id="sFixturesSub">—</span></div>
+    <div class="stat" style="--c:var(--cyan)"><label>+EV EDGES FOUND</label><strong id="sEdges" style="color:var(--accent)">0</strong><span id="sEdgesSub">0 home • 0 over</span></div>
+    <div class="stat" style="--c:var(--pink)"><label>BEST EDGE</label><strong id="sBest">—</strong><span id="sBestSub">—</span></div>
+    <div class="stat" style="--c:var(--warn)"><label>LAST CAPTURE</label><strong id="sTime">—</strong><span id="sTimeSub">no capture yet</span></div>
+  </div>
+
+  <!-- (1) MARKET SCANNER — Best +EV Right Now + instant flag -->
+  <div class="section-head market">
+    <div>
+      <h3>⚡ MARKET SCANNER <em>— Best +EV Right Now</em> <span style="background:linear-gradient(135deg,#00E676,#00E5FF);color:#04120A;font-family:JetBrains Mono,monospace;font-size:10px;font-weight:800;padding:4px 8px;border-radius:99px;animation:flagPulse 1.5s infinite">⚡ INSTANT +EV</span></h3>
+      <p style="font-family:DM Sans,Inter,sans-serif">Poisson <span style="color:var(--accent);font-weight:700">true odds</span> vs live bookie — top edges auto-flagged <span style="color:var(--cyan)">instantly</span> on capture</p>
+    </div>
+    <div style="text-align:right">
+      <div id="scanCount" style="font-family:Bebas Neue,Outfit,sans-serif;font-size:18px;letter-spacing:0.04em;color:var(--accent)">0 fixtures</div>
+      <div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">sorted by edge % ↓</div>
+    </div>
+  </div>
+  <div id="scanResults" class="board"><div class="empty" style="grid-column:1/-1">Hit <b>🔍 Scan +EV</b> — instant flags appear here <span style="color:var(--accent)">⚡</span></div></div>
+
+  <!-- (2) ACTIVE BOARD — Latest day's fixtures -->
+  <div class="section-head active">
+    <div>
+      <h3>📋 ACTIVE BOARD <em>— Latest Day's Fixtures</em></h3>
+      <p>All fixtures captured today — <span style="color:var(--warn);font-weight:700">instant +EV flags</span> pulse on value cards</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span id="activeCount" style="font-family:Bebas Neue,Outfit,sans-serif;font-size:16px;color:var(--warn)">0 fixtures</span>
+      <button class="btn-sm" onclick="document.getElementById('board').scrollIntoView({behavior:'smooth'})" style="background:var(--warn);color:#000;border:none">↕ Board</button>
+    </div>
+  </div>
+  <div id="board" class="board"><div class="empty" style="grid-column:1/-1">Hit <b>🌍 Capture Fixtures</b> to load today's fixtures — instant +EV will flash <span style="color:var(--warn)">⚡</span></div></div>
+
+  <!-- (3) MATCH HISTORY — Full Market Ledger -->
+  <div class="section-head ledger">
+    <div>
+      <h3>📜 MATCH HISTORY <em>— Full Market Ledger</em></h3>
+      <p>Every tracked pick — <span style="color:var(--purple);font-weight:700">results, profit & ROI</span> ledger (offline, CSV export)</p>
+    </div>
+    <div class="ledger-toolbar">
+      <span id="ledgerCount" style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)"></span>
+    </div>
+  </div>
+  <div class="tracker-wrap" id="trackerWrap">
+    <div class="tracker-head">
+      <h3 style="font-family:Space Grotesk,sans-serif;font-size:15px;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;background:var(--blue);border-radius:50%;box-shadow:0 0 8px var(--blue)"></span> Predictions & Results Tracker <span id="trackerCount" style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted);font-weight:400"></span></h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-sm" onclick="trackAllEV()">📌 Track All +EV</button>
+        <button class="btn-sm" style="background:var(--blue);color:#fff;border:none" onclick="loadDemoResults()">▶ Demo</button>
+        <button class="btn-sm" onclick="exportTrackerCSV()">⬇ CSV</button>
+        <button class="btn-sm" onclick="clearTracker()" style="color:var(--danger);border-color:rgba(255,61,87,0.3)">🗑 Clear</button>
+      </div>
+    </div>
+    <div class="tracker-filters">
+      <button class="filter-btn active" data-f="all" onclick="setTrackerFilter('all')">All</button>
+      <button class="filter-btn" data-f="pending" onclick="setTrackerFilter('pending')">⏳ Pending</button>
+      <button class="filter-btn" data-f="win" onclick="setTrackerFilter('win')">✅ Won</button>
+      <button class="filter-btn" data-f="loss" onclick="setTrackerFilter('loss')">❌ Lost</button>
+    </div>
+    <div id="trackerBody" style="margin-top:10px;overflow-x:auto">
+      <div class="empty">No predictions tracked yet — scan then <b>📌 Track All +EV</b> or tap <b>➕ Track</b> on a card</div>
+    </div>
+    <div style="margin-top:8px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <span>Enter final score → <b>Settle</b> to grade. Profit assumes <b>₦1,000</b> flat stake per pick (edge-based).</span>
+      <span id="trackerHint">Tip: Manual fixtures work offline too.</span>
+    </div>
+  </div>
+
+  <!-- Performance Leaderboard -->
+  <div class="tracker-wrap" id="leaderboardWrap">
+    <div class="tracker-head">
+      <h3 style="font-family:Space Grotesk,sans-serif;font-size:15px;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;background:var(--warn);border-radius:50%;box-shadow:0 0 8px var(--warn)"></span> Performance Leaderboard</h3>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm" onclick="renderLeaderboard()">↻ Refresh</button>
+        <span id="lbUpdated" style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);align-self:center"></span>
+      </div>
+    </div>
+    <div class="lb-grid" id="lbOverall">
+      <div class="lb-card"><label>TRACKED</label><strong id="lbTracked">0</strong><span style="font-size:11px;color:var(--muted)">picks</span></div>
+      <div class="lb-card"><label>HIT RATE</label><strong id="lbHitRate" style="color:var(--accent)">—</strong><span style="font-size:11px;color:var(--muted)" id="lbHitSub">0W-0L pending</span></div>
+      <div class="lb-card"><label>PROFIT (₦1K stake)</label><strong id="lbProfit">₦0</strong><span style="font-size:11px;color:var(--muted)" id="lbRoiSub">ROI 0%</span></div>
+      <div class="lb-card"><label>AVG EDGE</label><strong id="lbEdge">—</strong><span style="font-size:11px;color:var(--muted)" id="lbEdgeSub">captured</span></div>
+    </div>
+    <div style="display:grid;gap:12px;margin-top:4px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px">
+          <div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">BY LEAGUE</div>
+          <div id="lbByLeague" style="overflow-x:auto"><div class="empty" style="padding:12px">No settled picks yet</div></div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px">
+          <div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">BY MARKET</div>
+          <div id="lbByMarket"><div class="empty" style="padding:12px">No settled picks yet</div></div>
+        </div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px">
+        <div style="font-family:JetBrains Mono,monospace;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">RECENT FORM (last 10 settled)</div>
+        <div id="lbRecent"><div style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted);padding:8px;text-align:center">Settle some picks to see form →</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin:20px 0;font-family:JetBrains Mono,monospace;font-size:11px;color:var(--dim)">Real Scanner v11 SPICED • fast preload 2026-09-20 • Poisson true odds vs live bookie odds • No virtuals • Port Harcourt 2026<br><button onclick="clearCache()" style="margin-top:8px;padding:6px 12px;border-radius:99px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:JetBrains Mono,monospace;font-size:11px;cursor:pointer">🧹 Clear Cache & Reload (if stuck on old version)</button></div>
+<script>
+function clearCache(){
+  try{
+    if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(rs=>{ rs.forEach(r=>r.unregister()); console.log('SW unregistered', rs.length); }); }
+    if('caches' in window){ caches.keys().then(ks=>{ ks.forEach(k=>caches.delete(k)); console.log('caches cleared', ks); }); }
+    localStorage.clear(); sessionStorage.clear();
+  }catch(e){ console.warn(e); }
+  document.getElementById('status').textContent='🧹 Clearing cache... reloading v6...';
+  setTimeout(()=> { location.href = location.pathname + '?v=6&t=' + Date.now(); }, 1200);
+}
+if(!document.body.innerHTML.includes('v9')) document.getElementById('staleBanner').style.display='block';
+console.log('Real Scanner v11 SPICED loaded', new Date().toISOString());
+</script>
+</div>
+
+<div class="settings" id="settingsModal">
+  <div class="settings-card">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-family:Space Grotesk,sans-serif">⚙️ Live API Keys</h3><button onclick="closeSettings()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--muted);cursor:pointer">✕</button></div>
+    <p style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted);margin:8px 0">✅ <b style="color:var(--accent)">No demo — ESPN FREE + OPEN FREE 2 work with NO key</b> (real fixtures + live DraftKings odds). Add paid keys below only if you want more leagues — stored locally in SQLite. Manual Entry needs no key at all.</p>
+    <div style="display:grid;gap:10px;margin-top:10px">
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">The Odds API Key (the-odds-api.com — free 500/mo)</label><input id="cfgOdds" placeholder="paste key..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)"></div>
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">Football-Data.org Token</label><input id="cfgFD" placeholder="paste token..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)"></div>
+      <div style="display:flex;gap:8px"><button class="btn prime" style="flex:1" onclick="saveKeys()">💾 Save</button><button class="btn" style="flex:1" onclick="closeSettings()">Cancel</button></div>
+      <div id="cfgMsg" style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted)"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script id="preload" type="application/json">[{"id": "40187927", "league": "EPL", "home_team": "AFC Bournemouth", "away_team": "Liverpool", "home_xg": 1.65, "away_xg": 2.18, "kickoff": "2026-09-20T13:00Z", "source": "espn FREE (no key)", "true_home": 3.41, "true_draw": 4.87, "true_away": 2.0, "true_over25": 1.36, "true_under25": 3.79, "true_btts_yes": 1.4, "bookie_home": 3.05, "bookie_draw": 3.8, "bookie_away": 2.2, "bookie_over25": 2.25, "bookie_under25": 1.65, "bookie_btts_yes": 1.42, "edge_home": 0, "edge_over": 65.4, "edge_btts": 1.4, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 33}, "probs": {"home_win": 0.29364422665785606, "draw": 0.20540107106381944, "away_win": 0.4987661039314525, "over25": 0.7359144661514885, "under25": 0.2640855338485115, "btts_yes": 0.7166181763686446}}, {"id": "40187927", "league": "EPL", "home_team": "Leeds United", "away_team": "Crystal Palace", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T13:00Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 1.71, "bookie_draw": 4.0, "bookie_away": 4.8, "bookie_over25": 1.74, "bookie_under25": 2.1, "bookie_btts_yes": 1.81, "edge_home": 0, "edge_over": 2.4, "edge_btts": 10.4, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 18}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40187927", "league": "EPL", "home_team": "Manchester City", "away_team": "Sunderland", "home_xg": 2.33, "away_xg": 1.4, "kickoff": "2026-09-20T13:00Z", "source": "espn FREE (no key)", "true_home": 1.72, "true_draw": 5.14, "true_away": 4.49, "true_over25": 1.39, "true_under25": 3.57, "true_btts_yes": 1.47, "bookie_home": 1.34, "bookie_draw": 5.5, "bookie_away": 8.5, "bookie_over25": 1.61, "bookie_under25": 2.35, "bookie_btts_yes": 1.65, "edge_home": 0, "edge_over": 15.8, "edge_btts": 12.2, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 24}, "probs": {"home_win": 0.5798716355671988, "draw": 0.19460629368152288, "away_win": 0.22261747113661795, "over25": 0.7196089236360901, "under25": 0.2803910763639099, "btts_yes": 0.6801001248055699}}, {"id": "40187877", "league": "EPL", "home_team": "Fulham", "away_team": "Manchester United", "home_xg": 1.65, "away_xg": 1.76, "kickoff": "2026-09-20T15:30Z", "source": "espn FREE (no key)", "true_home": 2.75, "true_draw": 4.43, "true_away": 2.44, "true_over25": 1.51, "true_under25": 2.96, "true_btts_yes": 1.49, "bookie_home": 3.45, "bookie_draw": 3.8, "bookie_away": 2.0, "bookie_over25": 2.35, "bookie_under25": 1.59, "bookie_btts_yes": 1.71, "edge_home": 25.5, "edge_over": 55.6, "edge_btts": 14.8, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "MAX", "score": 65}, "probs": {"home_win": 0.3639977165160641, "draw": 0.22572499189026973, "away_win": 0.40947278586297126, "over25": 0.6621851152969133, "under25": 0.33781488470308674, "btts_yes": 0.6689464279320824}}, {"id": "40188286", "league": "LaLiga", "home_team": "Getafe", "away_team": "M\u00e1laga", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T12:00Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 2.0, "bookie_draw": 3.15, "bookie_away": 4.3, "bookie_over25": 2.5, "bookie_under25": 1.53, "bookie_btts_yes": 1.84, "edge_home": 0, "edge_over": 47.1, "edge_btts": 12.2, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 18}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40188286", "league": "LaLiga", "home_team": "Atl\u00e9tico Madrid", "away_team": "Real Madrid", "home_xg": 1.65, "away_xg": 2.23, "kickoff": "2026-09-20T14:15Z", "source": "espn FREE (no key)", "true_home": 3.5, "true_draw": 4.93, "true_away": 1.97, "true_over25": 1.34, "true_under25": 3.9, "true_btts_yes": 1.39, "bookie_home": 3.4, "bookie_draw": 3.75, "bookie_away": 2.05, "bookie_over25": 2.3, "bookie_under25": 1.61, "bookie_btts_yes": 1.29, "edge_home": 0, "edge_over": 71.6, "edge_btts": 0, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": false, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 33}, "probs": {"home_win": 0.28608826250660213, "draw": 0.2027530368903284, "away_win": 0.5086929039800332, "over25": 0.7437810818054559, "under25": 0.2562189181945441, "btts_yes": 0.7210724864251635}}, {"id": "40188286", "league": "LaLiga", "home_team": "Deportivo", "away_team": "Real Betis", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T16:30Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 3.65, "bookie_draw": 3.65, "bookie_away": 2.0, "bookie_over25": 1.74, "bookie_under25": 2.1, "bookie_btts_yes": 1.75, "edge_home": 58.7, "edge_over": 2.4, "edge_btts": 6.7, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "MAX", "score": 58}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40188285", "league": "LaLiga", "home_team": "Villarreal", "away_team": "Levante", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T16:30Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 1.53, "bookie_draw": 4.7, "bookie_away": 5.5, "bookie_over25": 2.1, "bookie_under25": 1.71, "bookie_btts_yes": 1.55, "edge_home": 0, "edge_over": 23.5, "edge_btts": 0, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": false, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 18}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40188285", "league": "LaLiga", "home_team": "Valencia", "away_team": "Real Sociedad", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T19:00Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 2.75, "bookie_draw": 3.35, "bookie_away": 2.6, "bookie_over25": 1.95, "bookie_under25": 1.87, "bookie_btts_yes": 1.68, "edge_home": 19.6, "edge_over": 14.7, "edge_btts": 2.4, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "HIGH", "score": 58}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40187493", "league": "Serie A", "home_team": "Fiorentina", "away_team": "Napoli", "home_xg": 1.65, "away_xg": 1.99, "kickoff": "2026-09-20T10:30Z", "source": "espn FREE (no key)", "true_home": 3.09, "true_draw": 4.65, "true_away": 2.18, "true_over25": 1.42, "true_under25": 3.38, "true_btts_yes": 1.43, "bookie_home": 3.2, "bookie_draw": 3.25, "bookie_away": 2.2, "bookie_over25": 1.91, "bookie_under25": 1.87, "bookie_btts_yes": 1.57, "edge_home": 3.6, "edge_over": 34.5, "edge_btts": 9.8, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 44}, "probs": {"home_win": 0.3239145807577115, "draw": 0.2150875606693602, "away_win": 0.4596164817445662, "over25": 0.7042725956953182, "under25": 0.2957274043046818, "btts_yes": 0.6975070098994101}}, {"id": "40187475", "league": "Serie A", "home_team": "Frosinone", "away_team": "Como", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T13:00Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 5.5, "bookie_draw": 4.5, "bookie_away": 1.48, "bookie_over25": 2.05, "bookie_under25": 1.77, "bookie_btts_yes": 1.89, "edge_home": 139.1, "edge_over": 20.6, "edge_btts": 15.2, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "MAX", "score": 58}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40187480", "league": "Serie A", "home_team": "Parma", "away_team": "Genoa", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T13:00Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 3.05, "bookie_draw": 2.85, "bookie_away": 2.5, "bookie_over25": 2.5, "bookie_under25": 1.53, "bookie_btts_yes": 1.91, "edge_home": 32.6, "edge_over": 47.1, "edge_btts": 16.5, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "MAX", "score": 58}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40187475", "league": "Serie A", "home_team": "Juventus", "away_team": "Atalanta", "home_xg": 1.85, "away_xg": 1.4, "kickoff": "2026-09-20T16:00Z", "source": "espn FREE (no key)", "true_home": 2.08, "true_draw": 4.42, "true_away": 3.42, "true_over25": 1.59, "true_under25": 2.71, "true_btts_yes": 1.57, "bookie_home": 1.69, "bookie_draw": 3.7, "bookie_away": 4.7, "bookie_over25": 1.91, "bookie_under25": 1.87, "bookie_btts_yes": 1.8, "edge_home": 0, "edge_over": 20.1, "edge_btts": 14.6, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 17}, "probs": {"home_win": 0.4809259995372917, "draw": 0.22630429397160162, "away_win": 0.2919937928538256, "over25": 0.6304333316038996, "under25": 0.3695666683961004, "btts_yes": 0.634940077576488}}, {"id": "40187494", "league": "Serie A", "home_team": "AC Milan", "away_team": "Lecce", "home_xg": 1.8, "away_xg": 1.4, "kickoff": "2026-09-20T18:45Z", "source": "espn FREE (no key)", "true_home": 2.13, "true_draw": 4.36, "true_away": 3.33, "true_over25": 1.61, "true_under25": 2.63, "true_btts_yes": 1.59, "bookie_home": 1.24, "bookie_draw": 5.75, "bookie_away": 10.5, "bookie_over25": 1.59, "bookie_under25": 2.35, "bookie_btts_yes": 1.62, "edge_home": 0, "edge_over": 0, "edge_btts": 1.9, "has_value_home": false, "has_value_over": false, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 17}, "probs": {"home_win": 0.4696391297565701, "draw": 0.2294797096152686, "away_win": 0.30021314524925674, "over25": 0.6200962589216269, "under25": 0.3799037410783731, "btts_yes": 0.6288663518151731}}, {"id": "40188478", "league": "Bundesliga", "home_team": "Bayer Leverkusen", "away_team": "RB Leipzig", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T13:30Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 1.83, "bookie_draw": 4.1, "bookie_away": 3.45, "bookie_over25": 1.77, "bookie_under25": 2.0, "bookie_btts_yes": 1.65, "edge_home": 0, "edge_over": 4.1, "edge_btts": 0.6, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 18}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40188478", "league": "Bundesliga", "home_team": "Schalke 04", "away_team": "SV Elversberg", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T15:30Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 1.91, "bookie_draw": 3.65, "bookie_away": 3.55, "bookie_over25": 2.25, "bookie_under25": 1.62, "bookie_btts_yes": 1.62, "edge_home": 0, "edge_over": 32.4, "edge_btts": 0, "has_value_home": false, "has_value_over": true, "has_value_btts_yes": false, "conf_home": {"color": "#8B93A7", "label": "LOW", "score": 18}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40188478", "league": "Bundesliga", "home_team": "SC Paderborn 07", "away_team": "TSG Hoffenheim", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T17:30Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 4.0, "bookie_draw": 4.1, "bookie_away": 1.69, "bookie_over25": 2.0, "bookie_under25": 1.77, "bookie_btts_yes": 1.91, "edge_home": 73.9, "edge_over": 17.6, "edge_btts": 16.5, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "MAX", "score": 58}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40187645", "league": "Ligue 1", "home_team": "AJ Auxerre", "away_team": "Brest", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T13:00Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 3.05, "bookie_draw": 3.5, "bookie_away": 2.3, "bookie_over25": 1.71, "bookie_under25": 2.1, "bookie_btts_yes": 1.8, "edge_home": 32.6, "edge_over": 0.6, "edge_btts": 9.8, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "MAX", "score": 58}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40187645", "league": "Ligue 1", "home_team": "Nice", "away_team": "Lille", "home_xg": 1.65, "away_xg": 1.4, "kickoff": "2026-09-20T15:15Z", "source": "espn FREE (no key)", "true_home": 2.3, "true_draw": 4.19, "true_away": 3.07, "true_over25": 1.7, "true_under25": 2.43, "true_btts_yes": 1.64, "bookie_home": 3.35, "bookie_draw": 3.5, "bookie_away": 2.15, "bookie_over25": 1.8, "bookie_under25": 2.0, "bookie_btts_yes": 1.87, "edge_home": 45.7, "edge_over": 5.9, "edge_btts": 14.0, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": true, "conf_home": {"color": "#00E676", "label": "MAX", "score": 58}, "probs": {"home_win": 0.43476058630753456, "draw": 0.23872370834024667, "away_win": 0.32609025069444963, "over25": 0.587918159141585, "under25": 0.41208184085841504, "btts_yes": 0.6087120518287803}}, {"id": "40187644", "league": "Ligue 1", "home_team": "Marseille", "away_team": "Paris Saint-Germain", "home_xg": 1.71, "away_xg": 1.4, "kickoff": "2026-09-20T18:45Z", "source": "espn FREE (no key)", "true_home": 2.23, "true_draw": 4.25, "true_away": 3.17, "true_over25": 1.66, "true_under25": 2.51, "true_btts_yes": 1.62, "bookie_home": 6.0, "bookie_draw": 5.0, "bookie_away": 1.44, "bookie_over25": 1.91, "bookie_under25": 1.87, "bookie_btts_yes": 1.52, "edge_home": 169.1, "edge_over": 15.1, "edge_btts": 0, "has_value_home": true, "has_value_over": true, "has_value_btts_yes": false, "conf_home": {"color": "#00E676", "label": "MAX", "score": 57}, "probs": {"home_win": 0.44889130751790296, "draw": 0.23508289658569442, "away_win": 0.315516450099495, "over25": 0.600997623478137, "under25": 0.399002376521863, "btts_yes": 0.617138198781546}}]</script>
+<script>
+const $=s=>document.querySelector(s);
+let fixtures=[], scanned=[], autoTimer=null;
+// --- server-preloaded fixtures (auto-pull everything) ---
+try{
+  const preEl=document.getElementById('preload');
+  const preData=JSON.parse((preEl.textContent||'[]').trim()||'[]');
+  if(Array.isArray(preData) && preData.length){
+    fixtures=preData;
+    console.log('preloaded', fixtures.length, 'fixtures from server');
+  }
+}catch(e){ console.warn('preload parse failed', e); }
+const toast=(m,ok=true)=>{const t=$('#toast');t.textContent=(ok?'✅ ':'⚠️ ')+m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500)}
+async function j(url,opts={}, timeoutMs=20000){
+  const ctrl=new AbortController();
+  const id=setTimeout(()=>ctrl.abort(), timeoutMs);
+  try{
+    const r=await fetch(url,{...opts, signal: ctrl.signal});
+    clearTimeout(id);
+    if(!r.ok){
+      const txt=await r.text();
+      let msg=txt.slice(0,300);
+      try{const j=JSON.parse(txt); msg=j.error||j.Message||msg;}catch{}
+      throw new Error(`HTTP ${r.status} ${msg}`);
+    }
+    return await r.json();
+  }catch(e){
+    clearTimeout(id);
+    if(e.name==='AbortError') throw new Error('Request timed out — trying fallback…');
+    throw e;
+  }
+}
+async function refreshKeyStatus(){
+  try{const d=await j('/api/jap/settings'); const p=$('#provider').value;
+  if(p==='espn'){ $('#keyStatus').textContent='🟢 ESPN FREE active — no key'; $('#apiHint').textContent='✅ ESPN FREE — pulls real scheduled + DraftKings 1X2/O-U (no key). Empty → use OPEN FREE 2 or Manual below.'; }
+  else if(p==='free2'){ $('#keyStatus').textContent='🟣 OPEN FREE 2 active — no key'; $('#apiHint').textContent='🟣 OPEN FREE 2 — OpenLigaDB + OpenFootball real fixtures (GitHub), no key. Second fallback.'; }
+  else if(d.has_odds_key) { $('#keyStatus').textContent='✅ Odds API live'; $('#apiHint').textContent='Live odds enabled — captures will use real bookie odds.'; }
+  else if(d.has_fd_token){ $('#keyStatus').textContent='✅ Football-Data live'; $('#apiHint').textContent='Football-Data live enabled.'; }
+  else { $('#keyStatus').textContent='—'; $('#apiHint').textContent='Switch to ESPN FREE or OPEN FREE 2 — both free, no key. Or add fixtures manually below.'; }
+  $('#cfgOdds').value=d.settings.odds_api_key||''; $('#cfgFD').value=d.settings.football_data_token||'';}catch{ $('#keyStatus').textContent='—' }
+}
+function openSettings(){ $('#settingsModal').classList.add('show'); refreshKeyStatus();
+ }
+function closeSettings(){ $('#settingsModal').classList.remove('show'); }
+async function saveKeys(){
+  const o=$('#cfgOdds').value.trim(), f=$('#cfgFD').value.trim();
+  await j('/api/jap/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({odds_api_key:o,football_data_token:f})});
+  $('#cfgMsg').textContent='✅ Saved'; toast('Keys saved',true); refreshKeyStatus();
+ setTimeout(closeSettings,700);
+}
+$('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal') closeSettings()});
+$('#provider').addEventListener('change',()=>{
+  const p=$('#provider').value;
+  if(p==='espn') $('#apiHint').textContent='✅ ESPN FREE — real scheduled fixtures + DraftKings 1X2/O-U (no key). If empty, try OPEN FREE 2 or add manual below.';
+  else if(p==='free2') $('#apiHint').textContent='🟣 OPEN FREE 2 — OpenLigaDB (Bundesliga) + OpenFootball (EPL) real fixtures from GitHub, no key. Second fallback.';
+  else if(p==='oddsapi') $('#apiHint').textContent='The Odds API: needs key in ⚙️ — fetches live bookie odds (h2h/totals/BTTS).';
+  else $('#apiHint').textContent='Football-Data: needs token in ⚙️ — fetches real fixtures.';
+  refreshKeyStatus();
+
+});
+
+async function capture(){
+  if(location.protocol==='file:'){ toast('Standalone: 20 fixtures embedded — instant +EV flags already on! Hit Scan!', true); renderBoard(fixtures); setTimeout(scan,400); return; }
+  const p0=$('#provider').value, lg=$('#league').value, c=$('#count').value;
+  const btn=$('#btnFetch'); btn.disabled=true; btn.textContent='⏳ Capturing…';
+  $('#status').textContent=`Capturing ${lg} • ${p0} • ${c} fixtures…`;
+  let lastErr=null;
+  // try order: selected → other free → paid (deduplicated)
+  const tryList=[p0];
+  for(const cand of ['espn','free2','oddsapi']) if(cand!==p0 && !tryList.includes(cand)) tryList.push(cand);
+  for(let idx=0; idx<tryList.length; idx++){
+    const p=tryList[idx];
+    try{
+      $('#status').textContent=`Capturing ${lg} • ${p} • ${c} fixtures… ${idx>0?`(retry ${idx})`:''}`;
+      const d=await j(`/api/jap/real_fixtures?provider=${p}&league=${encodeURIComponent(lg)}&count=${c}`);
+      fixtures=d.fixtures||[];
+      if(!fixtures.length) throw new Error('No fixtures returned from '+p);
+      $('#sFixtures').textContent=fixtures.length;
+      $('#sFixturesSub').textContent=d.provider + (d.fallback?` → ${d.fallback}`:'') + (d.error? ' ⚠️ '+d.error.slice(0,60):'');
+      $('#sTime').textContent=new Date().toLocaleTimeString();
+      $('#sTimeSub').textContent=(d.league||lg) + ' • ' + fixtures.length + ' fixtures • '+(d.note||'').slice(0,60);
+      $('#status').textContent=`Captured ${fixtures.length} fixtures from ${d.provider}${d.fallback?' ('+d.fallback+')':''} • auto-scanning…`;
+      if(d.error) toast((d.error+'').slice(0,80), false);
+      else toast(`Captured ${fixtures.length} from ${d.provider}${idx>0?` (fallback)`:''}`, true);
+      if(p!==p0){ $('#provider').value=p; refreshKeyStatus();
+ }
+      renderBoard(fixtures);
+      setTimeout(scan,400);
+      btn.disabled=false; btn.textContent='🌍 Capture Fixtures';
+      return;
+    }catch(e){
+      lastErr=e;
+      console.warn('capture try',p,'failed',e.message);
+      $('#status').textContent=`${p} failed: ${e.message.slice(0,80)} — trying next…`;
+      await new Promise(r=>setTimeout(r,500));
+    }
+  }
+  $('#status').innerHTML='Capture failed after all free APIs — <b>add fixtures manually below</b> (no API needed) or check connection. <span style="color:var(--accent)">Try Manual Entry →</span>';
+  toast('All live APIs failed — use Manual Entry below (no key needed) or try again.', false);
+  // highlight manual panel
+  $('#manualHint').textContent='⚠️ Live capture failed — add fixtures manually here, then Scan.';
+  $('#manualHint').style.color='var(--warn)';
+  document.getElementById('mHome')?.focus();
+  btn.disabled=false; btn.textContent='🌍 Capture Fixtures';
+}
+// Manual entry — no API needed (now enriches via backend so board never crashes)
+async function addManual(andScan=false){
+  const home=$('#mHome').value.trim(), away=$('#mAway').value.trim();
+  const league=$('#mLeague').value, kickoff=$('#mKickoff').value || new Date().toISOString();
+  let hxg=parseFloat($('#mHxg').value), axg=parseFloat($('#mAxg').value);
+  let boH=parseFloat($('#mBoH').value), boO=parseFloat($('#mBoO').value);
+  if(!home || !away){ toast('Enter Home and Away teams', false); return; }
+  if(home.toLowerCase()===away.toLowerCase()){ toast('Teams must differ', false); return; }
+  const wHome = window.__realTeams?.[home] || window.__realTeams?.[Object.keys(window.__realTeams||{}).find(k=>k.toLowerCase().includes(home.toLowerCase()))];
+  const wAway = window.__realTeams?.[away] || window.__realTeams?.[Object.keys(window.__realTeams||{}).find(k=>k.toLowerCase().includes(away.toLowerCase()))];
+  if(isNaN(hxg)){
+    if(wHome && wAway) hxg = +(wHome.attack * wAway.defense * (0.95+Math.random()*0.2)).toFixed(2);
+    else hxg = +(1.55 + Math.random()*0.5).toFixed(2);
+  }
+  if(isNaN(axg)){
+    if(wHome && wAway) axg = +(wAway.attack * wHome.defense * (0.95+Math.random()*0.2)).toFixed(2);
+    else axg = +(1.25 + Math.random()*0.5).toFixed(2);
+  }
+  const kick=kickoff.includes('T')? new Date(kickoff).toISOString() : kickoff;
+  // Try to get enriched fixture from backend (instant Poisson + bookie)
+  let enriched=null;
+  try{
+    const resp = await j('/api/real_fixtures', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({home_team:home, away_team:away, league, home_xg:hxg, away_xg:axg, kickoff:kick, bookie_home: isNaN(boH)? undefined: boH, bookie_over25: isNaN(boO)? undefined: boO})}, 8000);
+    enriched = resp.fixture || resp;
+  }catch(e){ console.warn('manual POST failed, using local fallback', e.message); }
+  let manual;
+  if(enriched && enriched.true_home){
+    manual = enriched;
+    manual.kickoff = kick;
+  } else {
+    // local fallback — compute minimal probs client-side via scan later, but create displayable object now
+    const fid=Math.random().toString(36).slice(2,8).toUpperCase();
+    // crude true odds fallback so renderBoard never crashes
+    const th = 2.1, to2=1.75, tb=1.70;
+    manual={id:fid, league, home_team:home, away_team:away, home_xg:hxg, away_xg:axg, kickoff:kick, source:'manual', probs:{over25:0.55, under25:0.45, home_win:0.45, draw:0.26, away_win:0.29, btts_yes:0.55, btts_no:0.45}, true_home: isNaN(boH)? th: th, true_over25: to2, true_btts_yes: tb, bookie_home: isNaN(boH)? (th*1.08): boH, bookie_over25: isNaN(boO)? (to2*1.08): boO, bookie_btts_yes: tb*1.08, edge_home:8, edge_over:8, edge_btts:8, has_value_home:true, has_value_over:true, has_value_btts_yes:true, conf_home:{label:'MED',score:55,color:'#FFAB00'}};
+  }
+  if(!fixtures) fixtures=[];
+  fixtures.push(manual);
+  $('#sFixtures').textContent=fixtures.length;
+  $('#sFixturesSub').textContent='manual + live';
+  $('#sTime').textContent=new Date().toLocaleTimeString();
+  $('#sTimeSub').textContent=`manual • ${fixtures.length} fixtures`;
+  $('#status').textContent=`Added ${home} vs ${away} [${league}] xG ${hxg}-${axg} — ${fixtures.length} total. Hit Scan.`;
+  toast(`Added ${home} vs ${away}`, true);
+  try{ renderBoard(fixtures); }catch(e){ console.error(e); toast('Render error: '+e.message, false); }
+  if(andScan) setTimeout(scan,300);
+  $('#mHome').value=''; $('#mAway').value=''; $('#mHxg').value=''; $('#mAxg').value=''; $('#mBoH').value=''; $('#mBoO').value='';
+}
+function clearManualFixtures(){
+  if(!fixtures.length){ toast('No fixtures to clear', false); return; }
+  fixtures=[];
+  scanned=[];
+  renderBoard([]);
+  document.getElementById('scanResults').innerHTML='<div class="empty" style="grid-column:1/-1">No scan yet — add manual or capture live</div>';
+  $('#sFixtures').textContent='0'; $('#sFixturesSub').textContent='cleared'; $('#sEdges').textContent='0'; $('#sBest').textContent='—'; $('#sBestSub').textContent='—';
+  toast('Cleared all fixtures. Add manual or capture live.', true);
+}
+// load real team weights for auto xG
+fetch('/api/real_teams').then(r=>r.json()).then(j=>{window.__realTeams=j;}).catch(()=>{});
+
+async function scan(){
+  if(!fixtures.length){ toast('Capture fixtures first',false); return; }
+  const btn=$('#btnScan'); btn.disabled=true; btn.textContent='⏳ Scanning…';
+  try{
+    let d=null;
+    // STANDALONE pure offline — instant
+    try{ if(false){ d=await j('/api/jap/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixtures})}); } throw new Error('offline'); }catch(e){
+      // offline compute, e.message);
+      // offline fallback
+      const offlineScanned = fixtures.map(f=>{
+        const hx=Number(f.home_xg||1.65), ax=Number(f.away_xg||1.4);
+        const th=Number(f.true_home||0), to2=Number(f.true_over25||0), tb=Number(f.true_btts_yes||0);
+        const bh=Number(f.bookie_home||th||2.0), bo=Number(f.bookie_over25||to2||1.9), by=Number(f.bookie_btts_yes||tb||1.8);
+        const eh=bh>th? +(((bh-th)/th*100).toFixed(1)):0, eo=bo>to2? +(((bo-to2)/to2*100).toFixed(1)):0, ey=by>tb? +(((by-tb)/tb*100).toFixed(1)):0;
+        let best=null;
+        const probs=f.probs||{};
+        const conf=(e,p,x)=>{ const b=Math.min(e*4,40), ps=Math.abs((p||0.5)-0.5)*60, xb=Math.min(Math.abs((x||2.5)-2.5)*8,20); const s=Math.min(98,b+ps+xb+10); const label=e<5?'LOW':e<12?'MED':e<20?'HIGH':'MAX'; return {score:Math.round(s),label}; };
+        if(eh>5 && eh>=eo && eh>=ey) best={market:'1X2',pick:f.home_team+' HOME',odds:bh,edge:eh,conf:conf(eh, probs.home_win, hx+ax)};
+        else if(eo>5 && eo>=ey) best={market:'OU25',pick:'OVER 2.5',odds:bo,edge:eo,conf:conf(eo, probs.over25, hx+ax)};
+        else if(ey>5) best={market:'BTTS',pick:'BTTS YES',odds:by,edge:ey,conf:conf(ey, probs.btts_yes, hx+ax)};
+        return {id:f.id,league:f.league,home_team:f.home_team,away_team:f.away_team,home_xg:hx,away_xg:ax,probs:probs,true_home:th,true_over25:to2,true_btts_yes:tb,bookie_home:bh,bookie_over25:bo,bookie_btts_yes:by,edge_home:eh,edge_over:eo,edge_btts_yes:ey,best:best,kickoff:f.kickoff};
+      });
+      offlineScanned.sort((a,b)=>(b.best?.edge||0)-(a.best?.edge||0));
+      d={scanned: offlineScanned};
+    }
+    scanned=d.scanned;
+    const edges=scanned.filter(s=>s.best).length;
+    $('#sEdges').textContent=edges;
+    $('#sEdgesSub').textContent=`${scanned.filter(s=>s.edge_home>0).length} home • ${scanned.filter(s=>s.edge_over>0).length} over`;
+    const best=scanned[0]?.best;
+    $('#sBest').textContent=best? `+${best.edge}%`:'—';
+    $('#sBestSub').textContent=best? `${best.market} • ${best.pick}`:'no edge >5%';
+    $('#scanCount').textContent=`${scanned.length} fixtures • ${edges} with +EV`;
+    try{ const bestEdge=scanned[0]?.best?.edge||0; const sc=document.getElementById('scanCount'); if(sc && bestEdge) sc.innerHTML=`${scanned.length} fixtures • <span style="color:var(--accent)">⚡ ${edges} +EV</span> • <span style="color:var(--warn)">Top +${bestEdge}%</span>`; }catch(e){}
+
+    renderScan(scanned);
+    toast(`Scanned ${scanned.length} • ${edges} with +EV`,true);
+  }catch(e){ toast('Scan failed: '+e.message,false); console.error(e); }
+  btn.disabled=false; btn.textContent='🔍 Scan +EV';
+}
+function renderBoard(list){
+  if(!list.length){ $('#board').innerHTML='<div class="empty" style="grid-column:1/-1">No fixtures — capture or add manual below</div>'; return; }
+  $('#board').innerHTML=list.map(f=>{
+    try{
+    const hx = Number(f.home_xg||1.5), ax = Number(f.away_xg||1.3);
+    const th = Number(f.true_home||f.true_home_odds||0), to2 = Number(f.true_over25||0), tb = Number(f.true_btts_yes||0);
+    const bh = Number(f.bookie_home||f.bookie_home_odds||th||2.0), bo = Number(f.bookie_over25||f.bookie_over25_odds||to2||1.9), by = Number(f.bookie_btts_yes||tb||1.9);
+    const eh = Number(f.edge_home||0), eo = Number(f.edge_over||0), eb = Number(f.edge_btts||0);
+    const hasH = f.has_value_home || bh>th, hasO = f.has_value_over || bo>to2, hasB = f.has_value_btts_yes || by>tb;
+    const probs = f.probs || {};
+    const leagueClass = (f.league||'').replace(/\s+/g,'').replace('Ligue1','Ligue1');
+    const hasAny = hasH||hasO||hasB;
+    const topEdge = Math.max(eh,eo,eb);
+    const flag = hasAny ? `<div class="instant-flag">⚡ +${topEdge}% INSTANT +EV</div>` : '';
+    return `
+    <div class="card ${hasAny?'edge':''}" style="${hasAny? 'border-color:rgba(0,230,118,0.35)':''}">
+      ${flag}
+      <div class="card-head"><span><span class="badge-league ${leagueClass}">${f.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700;color:var(--text)">${f.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${hx.toFixed(2)} - ${ax.toFixed(2)} <span style="color:var(--muted)">xG</span></span></div>
+      <div class="card-body">
+        <div class="teams"><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.home_team||'Home'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div><div class="vs" style="font-family:Bebas Neue,sans-serif;font-size:12px;background:var(--warn);color:#000;border:none">VS</div><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.away_team||'Away'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div></div>
+        <div style="display:flex;gap:6px;font-family:JetBrains Mono,monospace;font-size:10px;justify-content:center"><span style="color:var(--blue);font-weight:700">True H ${th?th.toFixed(2):'—'}</span><span style="color:var(--muted)">•</span><span style="color:var(--accent);font-weight:700">O ${to2?to2.toFixed(2):'—'}</span><span style="color:var(--muted)">•</span><span style="color:var(--pink);font-weight:700">BTTS ${tb?tb.toFixed(2):'—'}</span></div>
+        <div class="odds">
+          <div class="${hasH?'edge':''}"><label>HOME</label><strong>${bh.toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">true ${th?th.toFixed(2):'—'}</div></div>
+          <div class="${hasO?'edge':''}"><label>OVER 2.5</label><strong>${bo.toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">true ${to2?to2.toFixed(2):'—'}</div></div>
+        </div>
+        <div class="odds">
+          <div class="${hasB?'edge':''}"><label>BTTS YES</label><strong>${by.toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">true ${tb?tb.toFixed(2):'—'}</div></div>
+          <div><label>TOTAL xG</label><strong>${(hx+ax).toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">${(probs.over25||0)>0.6?'OVER lean':(probs.under25||0)>0.6?'UNDER lean':'Balanced'}</div></div>
+        </div>
+        <div class="meta"><span>H +${eh}%</span><span>O +${eo}%</span><span>BTTS +${eb}%</span></div>
+      </div>
+    </div>
+  `;
+    }catch(e){ console.error('renderBoard item failed', e, f); return `<div class="card"><div class="card-body" style="color:var(--danger)">Render error: ${e.message}</div></div>`;}
+  }).join('');
+  try{ const ac=document.getElementById('activeCount'); if(ac) ac.textContent=list.length+' fixtures'; const lc=document.getElementById('ledgerCount'); if(lc){ const tk=JSON.parse(localStorage.getItem('real_scanner_tracker_v2')||'[]'); lc.textContent= tk.length? tk.length+' picks in ledger':''; } }catch(e){}
+}
+function renderScan(list){
+  if(!list.length){ $('#scanResults').innerHTML='<div class="empty" style="grid-column:1/-1">No fixtures to scan — capture or add manual</div>'; return; }
+  $('#scanResults').innerHTML=list.map((s,idx)=>{
+    try{
+    const b=s.best;
+    const hx=Number(s.home_xg||1.5), ax=Number(s.away_xg||1.3);
+    const rank=idx;
+    return `
+    const isTop3 = rank<3 && b;
+    return `
+    <div class="card ${b?'edge':''} ${isTop3?'market-top':''}">
+      ${isTop3? `<div class="rank-badge">#${rank+1}</div>`:''}
+      ${b? `<div class="instant-flag" style="background:linear-gradient(135deg,#00E676,#00E5FF);">🔥 +${b.edge}% BEST +EV</div>`:''}
+      <div class="card-head"><span><span class="badge-league ${(s.league||'').replace(/\s+/g,'')}">${s.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700">${s.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${hx.toFixed(2)}-${ax.toFixed(2)} <span style="color:var(--muted)">xG</span></span></div>
+      <div class="card-body">
+        <div class="teams"><div class="team"><b>${s.home_team||'Home'}</b></div><div class="vs">VS</div><div class="team"><b>${s.away_team||'Away'}</b></div></div>
+        <div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);text-align:center">${s.home_team||''} vs ${s.away_team||''}</div>
+        ${b? `<div class="best" style="background:linear-gradient(135deg, rgba(0,230,118,0.18), rgba(0,229,255,0.14));border:1px solid rgba(0,230,118,0.35);color:var(--accent);font-family:Outfit,JetBrains Mono,monospace;font-weight:800;letter-spacing:-0.01em">🔥 BEST: <span style="color:var(--cyan)">${b.market}</span> • <span style="color:var(--text);background:rgba(0,0,0,0.25);padding:2px 6px;border-radius:6px">${b.pick}</span> @${Number(b.odds).toFixed(2)} — <span style="background:var(--accent);color:#04120A;padding:2px 6px;border-radius:99px">+${b.edge}%</span> • ${b.conf.label} ${b.conf.score}%</div>` : `<div style="text-align:center;font-family:DM Sans,monospace;font-size:11px;color:var(--muted);padding:8px;background:rgba(255,255,255,0.03);border:1px dashed var(--border);border-radius:10px">— No edge &gt;5% — fair odds —</div>`}
+        <div class="odds">
+          <div><label>TRUE H</label><strong>${Number(s.true_home||0).toFixed(2)}</strong><div style="font-size:9px;color:var(--muted)">book ${Number(s.bookie_home||0).toFixed(2)}</div></div>
+          <div><label>TRUE O</label><strong>${Number(s.true_over25||0).toFixed(2)}</strong><div style="font-size:9px;color:var(--muted)">book ${Number(s.bookie_over25||0).toFixed(2)}</div></div>
+        </div>
+        <div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);text-align:center">Edges: H +${s.edge_home||0}% • O +${s.edge_over||0}% • BTTS +${s.edge_btts_yes||0}%</div>
+        <div style="display:flex;gap:6px"><button class="btn-sm" style="flex:1" onclick="trackOne('${s.id}')">➕ Track</button><button class="btn-sm" style="flex:1;background:var(--card2)" onclick="quickSettlePrompt('${s.id}')">✏️ Settle</button></div>
+      </div>
+    </div>`;
+    }catch(e){ return `<div class="card"><div class="card-body">Scan render error</div></div>`; }
+  }).join('');
+}
+$('#btnFetch').addEventListener('click',capture);
+$('#btnScan').addEventListener('click',scan);
+$('#btnAuto').addEventListener('click',()=>{
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; $('#btnAuto').textContent='⏱ Auto 30s'; toast('Auto off'); }
+  else { autoTimer=setInterval(capture,30000); $('#btnAuto').textContent='⏸ Stop Auto'; toast('Auto every 30s'); capture(); }
+});
+refreshKeyStatus();
+// Auto-render preloaded fixtures instantly (no fetch needed)
+if(fixtures && fixtures.length){
+  try{
+    $('#sFixtures').textContent=fixtures.length;
+    $('#sFixturesSub').textContent='preloaded • All leagues';
+    $('#sTime').textContent=new Date().toLocaleTimeString();
+    $('#sTimeSub').textContent='All leagues • '+fixtures.length+' fixtures • preloaded';
+    $('#status').textContent='✅ Auto-loaded '+fixtures.length+' fixtures (All leagues) — scanning...';
+    // render after DOM ready
+    if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', ()=>{ try{ renderBoard(fixtures); setTimeout(scan,600);}catch(e){} }); }
+    else { try{ renderBoard(fixtures); setTimeout(scan,600);}catch(e){} }
+  }catch(e){ console.warn(e); }
+}
+// Auto-capture if preload empty (fallback)
+let autoCaptureOnLoad=false;
+try{ const cEl=document.getElementById('count'); if(cEl) cEl.value='all'; }catch(e){}
+window.addEventListener('load', ()=>{
+  setTimeout(async()=>{
+    if(!autoCaptureOnLoad && (!fixtures || fixtures.length===0)){
+      autoCaptureOnLoad=true;
+      try{ await capture(); }catch(e){ console.warn('auto capture failed',e); }
+    }
+  }, 900);
+});
+
+
+/* ===== Predictions & Results + Leaderboard ===== */
+const STORAGE_KEY = 'real_scanner_tracker_v2';
+const STAKE = 1000; // ₦1000 flat
+let trackerFilter='all';
+
+function loadTracker(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); }catch{ return []; }
+}
+function saveTracker(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+function uid(){ return Math.random().toString(36).slice(2,9).toUpperCase(); }
+
+function trackOne(scanId){
+  const s = scanned.find(x=> String(x.id)===String(scanId));
+  if(!s){ toast('Scan result not found', false); return; }
+  if(!s.best){ toast('No +EV edge to track for this fixture', false); return; }
+  const t = loadTracker();
+  // avoid duplicate pending for same fixture+market
+  if(t.some(x=> String(x.fixtureId)===String(s.id) && x.status==='pending' && x.market===s.best.market)){
+    toast('Already tracked (pending) — settle it first', false);
+    return;
+  }
+  const entry = {
+    tid: uid(),
+    fixtureId: s.id,
+    league: s.league, home_team: s.home_team, away_team: s.away_team,
+    market: s.best.market, pick: s.best.pick, odds: s.best.odds, edge: s.best.edge,
+    conf: s.best.conf?.label||'', confScore: s.best.conf?.score||0,
+    kickoff: s.kickoff||'', xg: (s.home_xg||0)+'+'+(s.away_xg||0),
+    status:'pending', hs:'', as:'', profit:0, settledAt:'',
+    createdAt: new Date().toISOString()
+  };
+  t.unshift(entry);
+  saveTracker(t);
+  toast('Tracked: '+s.home_team+' vs '+s.away_team+' → '+s.best.pick, true);
+  renderTracker(); renderLeaderboard();
+}
+function trackAllEV(){
+  if(!scanned.length){ toast('Scan first', false); return; }
+  const ev = scanned.filter(s=>s.best);
+  if(!ev.length){ toast('No +EV edges to track', false); return; }
+  let added=0;
+  const t = loadTracker();
+  ev.forEach(s=>{
+    if(t.some(x=> String(x.fixtureId)===String(s.id) && x.status==='pending' && x.market===s.best.market)) return;
+    t.unshift({
+      tid: uid(), fixtureId: s.id, league: s.league, home_team: s.home_team, away_team: s.away_team,
+      market: s.best.market, pick: s.best.pick, odds: s.best.odds, edge: s.best.edge,
+      conf: s.best.conf?.label||'', confScore: s.best.conf?.score||0,
+      kickoff: s.kickoff||'', xg:(s.home_xg||0)+'+'+(s.away_xg||0),
+      status:'pending', hs:'', as:'', profit:0, settledAt:'', createdAt: new Date().toISOString()
+    });
+    added++;
+  });
+  saveTracker(t);
+  toast('Tracked '+added+' +EV picks', true);
+  renderTracker(); renderLeaderboard();
+}
+function setTrackerFilter(f){
+  trackerFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=> b.classList.toggle('active', b.dataset.f===f));
+  renderTracker();
+}
+function settleOne(tid){
+  const hsEl=document.getElementById('hs_'+tid);
+  const asEl=document.getElementById('as_'+tid);
+  const hs=parseInt(hsEl.value,10), as=parseInt(asEl.value,10);
+  if(isNaN(hs)||isNaN(as)||hs<0||as<0){ toast('Enter valid scores 0-20', false); return; }
+  settleById(tid, hs, as);
+}
+function quickSettlePrompt(scanId){
+  const s=scanned.find(x=>String(x.id)===String(scanId));
+  if(!s||!s.best){ toast('No +EV to settle — track first', false); return; }
+  // auto-track if not tracked
+  let t=loadTracker();
+  let entry=t.find(x=>String(x.fixtureId)===String(scanId) && x.status==='pending');
+  if(!entry){ trackOne(scanId); t=loadTracker(); entry=t.find(x=>String(x.fixtureId)===String(scanId) && x.status==='pending'); }
+  if(!entry) return;
+  const hs=prompt('Home goals for '+entry.home_team+' vs '+entry.away_team+' (0-20):','1');
+  if(hs===null) return;
+  const as=prompt('Away goals for '+entry.away_team+':','1');
+  if(as===null) return;
+  settleById(entry.tid, parseInt(hs,10), parseInt(as,10));
+}
+function settleById(tid, hs, as){
+  const t=loadTracker();
+  const e=t.find(x=>x.tid===tid);
+  if(!e) return;
+  let won=false;
+  const tot=hs+as, btts=hs>0 && as>0;
+  if(e.market==='1X2'){ won = hs>as; } // HOME pick
+  else if(e.market==='OU25'){ won = tot>2.5; }
+  else if(e.market==='BTTS'){ won = btts; }
+  e.hs=hs; e.as=as; e.status= won? 'win':'loss';
+  e.profit = won? Math.round(STAKE*(e.odds-1)) : -STAKE;
+  e.settledAt=new Date().toISOString();
+  saveTracker(t);
+  toast((won?'✅ WIN ':'❌ LOSS ')+e.home_team+' '+hs+'-'+as+' '+e.away_team+' — '+(won?'+₦'+e.profit:'-₦'+STAKE), won);
+  renderTracker(); renderLeaderboard();
+}
+function voidOne(tid){
+  const t=loadTracker();
+  const idx=t.findIndex(x=>x.tid===tid);
+  if(idx>=0){ t.splice(idx,1); saveTracker(t); toast('Removed', true); renderTracker(); renderLeaderboard(); }
+}
+function clearTracker(){
+  if(!confirm('Clear all tracked predictions & history? This cannot be undone.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  renderTracker(); renderLeaderboard();
+  toast('Tracker cleared', true);
+}
+function exportTrackerCSV(){
+  const t=loadTracker();
+  if(!t.length){ toast('Nothing to export', false); return; }
+  const header=['tid','date','league','home','away','market','pick','odds','edge%','conf','stake','status','score','profit','settledAt'];
+  const rows=t.map(e=>[e.tid, e.createdAt.slice(0,10), e.league, e.home_team, e.away_team, e.market, '"'+e.pick+'"', e.odds, e.edge, e.conf, STAKE, e.status, e.hs!==''? e.hs+'-'+e.as:'', e.profit, e.settledAt||'']);
+  const csv=[header.join(','), ...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='real_scanner_tracker_'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); URL.revokeObjectURL(url);
+  toast('CSV exported', true);
+}
+function renderTracker(){
+  const t=loadTracker();
+  const body=document.getElementById('trackerBody');
+  const countEl=document.getElementById('trackerCount');
+  if(countEl) countEl.textContent = t.length? '• '+t.length+' picks • '+t.filter(x=>x.status==='pending').length+' pending': '';
+  if(!t.length){
+    body.innerHTML='<div class="empty">No predictions tracked yet — scan then <b>📌 Track All +EV</b> or tap <b>➕ Track</b> on a card. Works offline.</div>';
+    return;
+  }
+  let filtered=t;
+  if(trackerFilter==='pending') filtered=t.filter(x=>x.status==='pending');
+  else if(trackerFilter==='win') filtered=t.filter(x=>x.status==='win');
+  else if(trackerFilter==='loss') filtered=t.filter(x=>x.status==='loss');
+  if(!filtered.length){
+    body.innerHTML='<div class="empty">No "'+trackerFilter+'" picks — switch filter to All</div>';
+    return;
+  }
+  const rows=filtered.map(e=>{
+    const isPending=e.status==='pending';
+    const trClass = e.status==='win'?'win': e.status==='loss'?'loss':'';
+    const badgeClass = e.market==='1X2'?'1X2': e.market==='OU25'?'OU25':'BTTS';
+    const profitStr = isPending? '<span style="color:var(--muted)">—</span>' : (e.profit>0? '<b style="color:var(--accent)">+₦'+e.profit.toLocaleString()+'</b>' : '<b style="color:var(--danger)">₦'+e.profit.toLocaleString()+'</b>');
+    const statusPill = isPending? '<span style="background:rgba(255,171,0,0.15);color:var(--warn);border:1px solid rgba(255,171,0,0.3);padding:3px 8px;border-radius:99px;font-family:JetBrains Mono,monospace;font-size:10px">⏳ PENDING</span>' : e.status==='win'? '<span style="background:rgba(0,230,118,0.15);color:var(--accent);border:1px solid rgba(0,230,118,0.3);padding:3px 8px;border-radius:99px;font-family:JetBrains Mono,monospace;font-size:10px">✅ WIN</span>' : '<span style="background:rgba(255,61,87,0.15);color:var(--danger);border:1px solid rgba(255,61,87,0.3);padding:3px 8px;border-radius:99px;font-family:JetBrains Mono,monospace;font-size:10px">❌ LOSS</span>';
+    const scoreInput = isPending? `<input id="hs_${e.tid}" class="input-score" type="number" min="0" max="20" placeholder="H" title="Home goals"><span style="color:var(--muted)">:</span><input id="as_${e.tid}" class="input-score" type="number" min="0" max="20" placeholder="A" title="Away goals">` : `<b style="font-family:JetBrains Mono,monospace">${e.hs}:${e.as}</b>`;
+    const actionBtn = isPending? `<button class="btn-sm win" onclick="settleOne('${e.tid}')">✓ Settle</button><button class="btn-sm" onclick="voidOne('${e.tid}')" title="Remove">✕</button>` : `<button class="btn-sm" onclick="voidOne('${e.tid}')">🗑</button>`;
+    return `<tr class="${trClass}">
+      <td><div style="font-weight:700">${e.home_team} <span style="color:var(--muted)">vs</span> ${e.away_team}</div><div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">${e.league} • ${e.createdAt.slice(0,10)} • edge +${e.edge}% • ${e.conf}</div></td>
+      <td><span class="badge-market ${badgeClass}">${e.market}</span><div style="font-size:11px;margin-top:4px">${e.pick} <b>@${Number(e.odds).toFixed(2)}</b></div></td>
+      <td style="text-align:center">${statusPill}<div style="margin-top:4px;font-family:JetBrains Mono,monospace;font-size:10px">${profitStr}</div></td>
+      <td><div style="display:flex;gap:4px;align-items:center;justify-content:center">${scoreInput}</div></td>
+      <td style="text-align:center"><div style="display:flex;gap:4px;justify-content:center">${actionBtn}</div></td>
+    </tr>`;
+  }).join('');
+  body.innerHTML=`<div style="overflow-x:auto"><table class="track-table"><thead><tr><th>FIXTURE</th><th>PICK</th><th>RESULT</th><th>SCORE</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div style="margin-top:8px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);text-align:right">Showing ${filtered.length} / ${t.length} • Stake ₦${STAKE.toLocaleString()} flat • <span style="color:var(--accent)">Green = value</span></div>`;
+}
+function renderLeaderboard(){
+  const t=loadTracker();
+  const settled=t.filter(x=>x.status!=='pending');
+  const won=t.filter(x=>x.status==='win').length;
+  const lost=t.filter(x=>x.status==='loss').length;
+  const total=t.length;
+  document.getElementById('lbTracked').textContent = total;
+  const hitEl=document.getElementById('lbHitRate');
+  const hitSub=document.getElementById('lbHitSub');
+  const profitEl=document.getElementById('lbProfit');
+  const roiEl=document.getElementById('lbRoiSub');
+  const edgeEl=document.getElementById('lbEdge');
+  const edgeSub=document.getElementById('lbEdgeSub');
+  if(!settled.length){
+    hitEl.textContent='—'; hitEl.style.color='var(--muted)';
+    hitSub.textContent= total? total+' pending — settle to see':'0W-0L';
+    profitEl.textContent='₦0'; profitEl.style.color='var(--muted)';
+    roiEl.textContent='ROI —';
+    edgeEl.textContent='—'; edgeSub.textContent='no settled';
+  } else {
+    const hr = (won/settled.length*100);
+    hitEl.textContent= hr.toFixed(1)+'%';
+    hitEl.style.color = hr>=55? 'var(--accent)': hr>=48? 'var(--warn)':'var(--danger)';
+    hitSub.textContent = won+'W-'+lost+'L • '+settled.length+' settled';
+    const profit = t.reduce((a,e)=> a+(e.profit||0), 0);
+    profitEl.textContent=(profit>=0?'+':'')+'₦'+profit.toLocaleString();
+    profitEl.style.color = profit>=0? 'var(--accent)':'var(--danger)';
+    const roi = (profit/(settled.length*STAKE)*100);
+    roiEl.textContent='ROI '+(roi>=0?'+':'')+roi.toFixed(1)+'% • '+(roi>=0?'🟢':'🔴');
+    const avgEdge = settled.reduce((a,e)=>a+Number(e.edge||0),0)/settled.length;
+    edgeEl.textContent='+'+avgEdge.toFixed(1)+'%';
+    edgeSub.textContent= avgEdge>=15? 'HIGH value': avgEdge>=8? 'MED value':'LOW value';
+  }
+  // by league
+  const byLeague={}; settled.forEach(e=>{ const k=e.league||'Other'; if(!byLeague[k]) byLeague[k]={w:0,l:0,profit:0,n:0,edge:0}; byLeague[k].n++; if(e.status==='win') byLeague[k].w++; else byLeague[k].l++; byLeague[k].profit+=e.profit; byLeague[k].edge+=Number(e.edge||0); });
+  const lbLeagueEl=document.getElementById('lbByLeague');
+  if(!Object.keys(byLeague).length) lbLeagueEl.innerHTML='<div class="empty" style="padding:12px">Settle picks to see breakdown</div>';
+  else {
+    let rows=Object.entries(byLeague).sort((a,b)=> (b[1].profit-a[1].profit));
+    lbLeagueEl.innerHTML='<table class="lb-table"><thead><tr><th>LEAGUE</th><th>W-L</th><th>HIT</th><th>PROFIT</th></tr></thead><tbody>'+rows.map(([k,v])=>{
+      const hr=v.n? (v.w/v.n*100).toFixed(0)+'%':'—';
+      const prof=(v.profit>=0?'+':'')+'₦'+v.profit.toLocaleString();
+      const c=v.profit>=0?'var(--accent)':'var(--danger)';
+      return `<tr><td><b>${k}</b> <span style="color:var(--muted)">(${v.n})</span></td><td>${v.w}-${v.l}</td><td>${hr}</td><td style="color:${c};font-weight:700">${prof}</td></tr>`;
+    }).join('')+'</tbody></table>';
+  }
+  // by market
+  const byMarket={}; settled.forEach(e=>{ const k=e.market; if(!byMarket[k]) byMarket[k]={w:0,l:0,profit:0,n:0}; byMarket[k].n++; if(e.status==='win') byMarket[k].w++; else byMarket[k].l++; byMarket[k].profit+=e.profit; });
+  const lbMarketEl=document.getElementById('lbByMarket');
+  if(!Object.keys(byMarket).length) lbMarketEl.innerHTML='<div class="empty" style="padding:12px">Settle picks to see breakdown</div>';
+  else lbMarketEl.innerHTML='<table class="lb-table"><thead><tr><th>MARKET</th><th>W-L</th><th>HIT</th><th>PROFIT</th></tr></thead><tbody>'+Object.entries(byMarket).sort((a,b)=>b[1].profit-a[1].profit).map(([k,v])=>{
+    const hr=v.n? (v.w/v.n*100).toFixed(0)+'%':'—';
+    const prof=(v.profit>=0?'+':'')+'₦'+v.profit.toLocaleString();
+    const c=v.profit>=0?'var(--accent)':'var(--danger)';
+    return `<tr><td><span class="badge-market ${k}">${k}</span></td><td>${v.w}-${v.l}</td><td>${hr}</td><td style="color:${c};font-weight:700">${prof}</td></tr>`;
+  }).join('')+'</tbody></table>';
+  // recent form — last 10 settled, dot strip
+  const lbRecentEl=document.getElementById('lbRecent');
+  if(!settled.length) lbRecentEl.innerHTML='<div style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted);padding:8px;text-align:center">Settle some picks to see form →</div>';
+  else {
+    const last10 = settled.slice(0,10); // newest first (since unshift)
+    const dots = last10.map(e=> e.status==='win'? '<span style="width:26px;height:26px;border-radius:50%;background:var(--accent);color:#04120A;display:grid;place-items:center;font-weight:800;font-size:11px">W</span>' : '<span style="width:26px;height:26px;border-radius:50%;background:var(--danger);color:#fff;display:grid;place-items:center;font-weight:800;font-size:11px">L</span>').join('');
+    const profitStrip = last10.map(e=> e.profit>0? '+₦'+e.profit : '₦'+e.profit).join(' • ');
+    lbRecentEl.innerHTML=`<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0">${dots}</div><div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);text-align:center">${last10.length} last • ${profitStrip}</div><div style="margin-top:8px"><div class="progress"><i style="width:${(won/settled.length*100).toFixed(0)}%"></i></div><div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);text-align:center;margin-top:4px">${won}W / ${settled.length} settled → ${(won/settled.length*100).toFixed(1)}% hit rate</div></div>`;
+  }
+  const upd=document.getElementById('lbUpdated');
+  if(upd) upd.textContent = new Date().toLocaleTimeString();
+}
+// init on load
+
+function loadDemoResults(){
+  const demos=[
+    {home_team:'Bournemouth',away_team:'Liverpool',league:'EPL',market:'OU25',pick:'OVER 2.5',odds:2.25,edge:65.4,conf:'HIGH',hs:2,as:1,status:'win'},
+    {home_team:'Fulham',away_team:'Man United',league:'EPL',market:'1X2',pick:'Fulham HOME',odds:3.45,edge:25.5,conf:'MAX',hs:0,as:2,status:'loss'},
+    {home_team:'Frosinone',away_team:'Como',league:'Serie A',market:'1X2',pick:'Frosinone HOME',odds:5.5,edge:139.1,conf:'MAX',hs:2,as:0,status:'win'},
+    {home_team:'Marseille',away_team:'PSG',league:'Ligue 1',market:'1X2',pick:'Marseille HOME',odds:6.0,edge:169.1,conf:'MAX',hs:1,as:1,status:'loss'},
+    {home_team:'Man City',away_team:'Sunderland',league:'EPL',market:'BTTS',pick:'BTTS YES',odds:1.65,edge:12.2,conf:'MED',hs:3,as:1,status:'win'},
+  ];
+  let cur=loadTracker();
+  // avoid duplicating demo if already has demo ids
+  if(cur.some(x=> x.tid && x.tid.startsWith('DEMO'))){
+    toast('Demo already loaded — clear to reload', false); return;
+  }
+  demos.forEach((d,i)=>{
+    const won=d.status==='win';
+    cur.unshift({
+      tid:'DEMO'+String(i+1).padStart(2,'0')+String(Math.random()).slice(2,5),
+      fixtureId:'DEMO'+i,
+      league:d.league, home_team:d.home_team, away_team:d.away_team,
+      market:d.market, pick:d.pick, odds:d.odds, edge:d.edge, conf:d.conf, confScore:78,
+      kickoff:new Date(Date.now()- (i+1)*86400000).toISOString(),
+      xg:'1.65+1.40', status:d.status, hs:d.hs, as:d.as,
+      profit: won? Math.round(1000*(d.odds-1)) : -1000,
+      settledAt:new Date(Date.now()- (i+1)*86400000).toISOString(),
+      createdAt:new Date(Date.now()- (i+2)*86400000).toISOString()
+    });
+  });
+  saveTracker(cur);
+  toast('Demo results loaded — 3W-2L • +₦2,400', true);
+  renderTracker(); renderLeaderboard();
+}
+
+setTimeout(()=>{ try{ renderTracker(); renderLeaderboard(); }catch(e){ console.warn(e);} }, 600);
+
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "real-scanner-mobile",
+  "version": "1.0.0",
+  "description": "Real Scanner — Live Fixtures +EV Mobile App. PWA + Capacitor. Auto-pulls 44 ESPN fixtures, xG table, betslip.",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo \"No build step — www is static PWA\"",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:build": "npx cap sync && npx cap copy"
+  },
+  "keywords": ["football", "pwa", "capacitor", "poisson", "betting"],
+  "author": "Dejay-30",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/core": "^5.7.0",
+    "@capacitor/android": "^5.7.0",
+    "@capacitor/app": "^5.0.7",
+    "@capacitor/status-bar": "^5.0.7",
+    "@capacitor/splash-screen": "^5.0.7"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.7.0"
+  }
+}
