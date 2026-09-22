@@ -473,7 +473,7 @@ $('#provider').addEventListener('change',()=>{
 });
 
 /* ===== v15 DIRECT CAPTURE — every real fixture, real odds only ===== */
-const RS15={AVG:1.35,HOME:1.12,AWAY:0.93,MIN_N:5,MAX_FIX:400,CHUNK:4,PACE:300};
+const RS15={AVG:1.35,HOME:1.12,AWAY:0.93,MIN_N:5,MAX_FIX:400,CHUNK:4,PACE:300,SUM_CAP:80};
 const RS15C={teams:{}};
 function esc15(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function rs15SOFA(p){return fetch('https://api.sofascore.com/api/v1'+p,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
@@ -660,13 +660,18 @@ async function rs15Enrich(list,prog){
   return out;
 }
 function rs15Norm(t){return String(t||'').toLowerCase().replace(/\b(fc|afc|cf|sc|bc|club|ac|as)\b/g,'').replace(/[^a-z]/g,'');}
-/* one scoreboard fetch -> {normHome|normAway: DraftKings 1X2} for cross-filling */
-async function rs15EspnOddsMap(dateStr){
+/* one scoreboard fetch -> {odds: {normHome|normAway: DraftKings 1X2}, ids: {…: espn event id}} */
+async function rs15EspnMaps(dateStr){
   const ymd=dateStr.replace(/-/g,'');
   const d=await rs15ESPN('/apis/site/v2/sports/soccer/all/scoreboard?dates='+ymd+'&limit=500');
-  const map={};
+  const oddsMap={},idMap={};
   ((((d||{}).events)||[])).forEach(e=>{
     const comps=((e.competitions||[{}])[0]);
+    let hm=null,aw=null;
+    (comps.competitors||[]).forEach(c=>{if(c.homeAway==='home')hm=((c.team||{}).displayName)||null;else if(c.homeAway==='away')aw=((c.team||{}).displayName)||null;});
+    if(!hm||!aw)return;
+    const key=rs15Norm(hm)+'|'+rs15Norm(aw);
+    idMap[key]=String(e.id);
     const o=(comps.odds||[])[0];
     if(!o||!o.moneyline)return;
     function dec(side){
@@ -680,13 +685,58 @@ async function rs15EspnOddsMap(dateStr){
       return Math.round((str.charAt(0)==='+'?1+n/100:1+100/n)*100)/100;
     }
     const c1=dec('home'),cx=dec('draw'),c2=dec('away');
-    if(!(c1>1&&cx>1&&c2>1))return;
-    let hm=null,aw=null;
-    (comps.competitors||[]).forEach(c=>{if(c.homeAway==='home')hm=((c.team||{}).displayName)||null;else if(c.homeAway==='away')aw=((c.team||{}).displayName)||null;});
-    if(!hm||!aw)return;
-    map[rs15Norm(hm)+'|'+rs15Norm(aw)]={o1:c1,ox:cx,o2:c2,n:1};
+    if(c1>1&&cx>1&&c2>1)oddsMap[key]={o1:c1,ox:cx,o2:c2,n:1};
   });
-  return map;
+  return {odds:oddsMap,ids:idMap};
+}
+/* v17: ESPN per-event summary odds — many real matches carry 1X2 ONLY here
+   (numeric American moneylines on homeTeamOdds/drawOdds/awayTeamOdds) */
+function rs15AmDec(v){
+  if(v==null)return null;
+  const n=parseFloat(v);
+  if(!isFinite(n)||n===0)return null;
+  return Math.round((1+(n>0?n/100:100/Math.abs(n)))*100)/100;
+}
+function rs15SummaryOddsOf(s){
+  const arr=((((s||{}).odds)||[])).concat(((((s||{}).pickcenter)||[])));
+  for(let i=0;i<arr.length;i++){
+    const o=arr[i];if(!o)continue;
+    const h=rs15AmDec((o.homeTeamOdds||{}).moneyLine),
+          x=rs15AmDec((o.drawOdds||{}).moneyLine),
+          a=rs15AmDec((o.awayTeamOdds||{}).moneyLine);
+    if(h>1&&x>1&&a>1)return {o1:h,ox:x,o2:a,n:1};
+  }
+  return null;
+}
+async function rs15EspnSummaryOdds(eid){
+  return rs15SummaryOddsOf(await rs15ESPN('/apis/site/v2/sports/soccer/all/summary?event='+eid));
+}
+/* v17: last-resort pricing pass — scoreboard cross-fill first, then a paced
+   per-event summary sweep for whatever is still unpriced (popular first) */
+async function rs15EspnPrice(rows,dateStr){
+  let maps=null;
+  try{ maps=await rs15EspnMaps(dateStr); }catch(e){}
+  if(maps)rows=rs15CrossFill(rows,maps.odds);
+  const targets=[];
+  rows.forEach(r=>{
+    if(r.bookie_home!=null||!r._fx)return;
+    const eid=(r._fx.src==='espn')?String(r._fx.id):((maps&&maps.ids[rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team)])||null);
+    if(eid)targets.push({row:r,eid:eid});
+  });
+  if(targets.length>RS15.SUM_CAP)targets.length=RS15.SUM_CAP;
+  for(let i=0;i<targets.length;i+=RS15.CHUNK){
+    const part=targets.slice(i,i+RS15.CHUNK);
+    const got=await Promise.all(part.map(async t=>{
+      try{return [t.row,await rs15EspnSummaryOdds(t.eid)];}catch(e){return null;}
+    }));
+    got.forEach(g=>{
+      if(!g||!g[1])return;
+      const idx=rows.indexOf(g[0]);
+      if(idx>=0)rows[idx]=rs15Mk(g[0]._fx,g[1],g[0]._rh,g[0]._ra);
+    });
+    if(i+RS15.CHUNK<targets.length)await new Promise(r2=>setTimeout(r2,RS15.PACE));
+  }
+  return rows;
 }
 /* sofa multi-book odds by name-match (when ESPN is primary and Sofa is reachable) */
 async function rs15SofaOddsForNames(dateStr,needKeys){
@@ -733,7 +783,7 @@ async function rs15Direct(dateStr,prov){
         if(fx.length){
           /* anything SofaScore couldn't price -> try ESPN DraftKings by name */
           if(fx.some(r=>r.bookie_home==null)){
-            try{ fx=rs15CrossFill(fx,await rs15EspnOddsMap(useDate)); }catch(e){}
+            try{ fx=await rs15EspnPrice(fx,useDate); }catch(e){}
           }
           fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
           return {fixtures:fx,provider:'SofaScore',note:'every fixture · multi-book averaged odds · last-10 team ratings'};
@@ -751,6 +801,10 @@ async function rs15Direct(dateStr,prov){
           const need=fx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
           fx=rs15CrossFill(fx,await rs15SofaOddsForNames(useDate,need));
         }catch(e){}
+      }
+      /* still unpriced -> ESPN per-event summary sweep (real DraftKings 1X2) */
+      if(fx.some(r=>r.bookie_home==null)){
+        try{ fx=await rs15EspnPrice(fx,useDate); }catch(e){}
       }
       fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
       return {fixtures:fx,provider:'ESPN',note:'every league · DraftKings prices'};
@@ -981,7 +1035,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v16';
+let BUILD_VERSION = 'v17';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
