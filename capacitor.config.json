@@ -5,7 +5,11 @@
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https",
-    "cleartext": true
+    "cleartext": true,
+    "url": "https://dejay-30.github.io/real-scanner-mobile/",
+    "allowNavigation": [
+      "dejay-30.github.io/*"
+    ]
   },
   "plugins": {
     "SplashScreen": {
