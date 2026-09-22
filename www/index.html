@@ -473,7 +473,7 @@ $('#provider').addEventListener('change',()=>{
 });
 
 /* ===== v15 DIRECT CAPTURE — every real fixture, real odds only ===== */
-const RS15={AVG:1.35,HOME:1.12,AWAY:0.93,MIN_N:5,MAX_FIX:400,CHUNK:6};
+const RS15={AVG:1.35,HOME:1.12,AWAY:0.93,MIN_N:5,MAX_FIX:400,CHUNK:4,PACE:300};
 const RS15C={teams:{}};
 function esc15(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function rs15SOFA(p){return fetch('https://api.sofascore.com/api/v1'+p,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
@@ -543,7 +543,12 @@ function rs15Mk(fx,odds,rh,ra){
   const bh=odds?r2(odds.o1):null,bd=odds?r2(odds.ox):null,ba=odds?r2(odds.o2):null;
   /* +EV ONLY when a real book price beats the FORM model's true odds */
   const eh=(basis==='FORM'&&bh!=null&&bh>th)?+(((bh-th)/th*100).toFixed(1)):0;
+  /* auto-prediction: the model's most likely outcome, on every fixture */
+  let pk='home_win',pl='HOME WIN';
+  if(p.draw>=p[pk]){pk='draw';pl='DRAW';}
+  if(p.away_win>=p[pk]){pk='away_win';pl='AWAY WIN';}
   return {id:String(fx.id),league:fx.league||'Football',home_team:fx.home,away_team:fx.away,
+    pred:{pick:pk,label:pl,prob:p[pk],basis:basis},
     kickoff:fx.ts?new Date(fx.ts*1000).toISOString():new Date().toISOString(),
     home_xg:+lam.lh.toFixed(2),away_xg:+lam.la.toFixed(2),probs:p,
     true_home:th,true_draw:td,true_away:ta,
@@ -565,16 +570,21 @@ async function rs15SofaDay(dateStr,wantPast){
     if(wantPast)return true;
     return t==='notstarted';
   }).slice(0,RS15.MAX_FIX);
-  return use.map(e=>{
+  const mapped=use.map(e=>{
     const hs=(e.homeScore||{}).current,as=(e.awayScore||{}).current;
     const fin=(e.status||{}).type!=='notstarted';
-    return {id:e.id,home:e.homeTeam.name,away:e.awayTeam.name,
+    return {id:e.id,home:e.homeTeam.name,away:e.awayTeam.name,src:'sofa',
+      uc:(((e.homeTeam||{}).userCount)||0)+(((e.awayTeam||{}).userCount)||0),
       hid:(e.homeTeam||{}).id||null,aid:(e.awayTeam||{}).id||null,
       lg:((e.tournament&&e.tournament.category&&e.tournament.category.name?e.tournament.category.name+' · ':'')+(e.tournament&&e.tournament.name?e.tournament.name:'')),
       ts:e.startTimestamp||null,status:(e.status||{}).type||'',
       is_past:fin&&hs!=null,result:fin&&hs!=null?(hs+'-'+as):'',
       home_score:fin?hs:null,away_score:fin?as:null};
   });
+  /* price the matches people actually bet on first — if the wire throttles
+     the sweep mid-way, the big fixtures already carry their books */
+  mapped.sort((a,b)=>(b.uc||0)-(a.uc||0));
+  return mapped;
 }
 async function rs15EspnDay(dateStr){
   const ymd=dateStr.replace(/-/g,'');
@@ -624,24 +634,88 @@ async function rs15Enrich(list,prog){
       try{
         let odds=fx.odds||null;
         if(!odds&&fx.src!=='espn'){
-          try{
-            const od=await rs15SOFA('/event/'+fx.id+'/odds/summary');
-            const books=rs15Books(od||{});
-            if(books.length){let a=0,x=0,b=0;books.forEach(B=>{a+=B.o1;x+=B.ox;b+=B.o2;});odds={o1:a/books.length,ox:x/books.length,o2:b/books.length,n:books.length};}
-          }catch(e){}
+          /* two attempts with a beat between — the wire throttles bursts */
+          for(let att=0;att<2&&!odds;att++){
+            try{
+              const od=await rs15SOFA('/event/'+fx.id+'/odds/summary');
+              const books=rs15Books(od||{});
+              if(books.length){let a=0,x=0,b=0;books.forEach(B=>{a+=B.o1;x+=B.ox;b+=B.o2;});odds={o1:a/books.length,ox:x/books.length,o2:b/books.length,n:books.length};}
+            }catch(e){ if(att===0) await new Promise(r=>setTimeout(r,600)); }
+          }
         }
         let rh=null,ra=null;
         if(fx.hid!=null||fx.aid!=null){
           const rr=await Promise.all([rs15Ratings(fx.hid),rs15Ratings(fx.aid)]);
           rh=rr[0];ra=rr[1];
         }
-        return rs15Mk(fx,odds,rh,ra);
+        const row=rs15Mk(fx,odds,rh,ra);
+        row._fx=fx;row._rh=rh;row._ra=ra;   /* kept for cross-fill odds swaps */
+        return row;
       }catch(e){return null;}
     }));
     rows.forEach(r=>{if(r)out.push(r);});
     if(prog)prog(Math.min(st+RS15.CHUNK,list.length),list.length);
+    if(st+RS15.CHUNK<list.length) await new Promise(r=>setTimeout(r,RS15.PACE));
   }
   return out;
+}
+function rs15Norm(t){return String(t||'').toLowerCase().replace(/\b(fc|afc|cf|sc|bc|club|ac|as)\b/g,'').replace(/[^a-z]/g,'');}
+/* one scoreboard fetch -> {normHome|normAway: DraftKings 1X2} for cross-filling */
+async function rs15EspnOddsMap(dateStr){
+  const ymd=dateStr.replace(/-/g,'');
+  const d=await rs15ESPN('/apis/site/v2/sports/soccer/all/scoreboard?dates='+ymd+'&limit=500');
+  const map={};
+  ((((d||{}).events)||[])).forEach(e=>{
+    const comps=((e.competitions||[{}])[0]);
+    const o=(comps.odds||[])[0];
+    if(!o||!o.moneyline)return;
+    function dec(side){
+      const w=(o.moneyline[side]||{});
+      const v=((w.close||{}).odds)!=null?((w.close||{}).odds):(((w.open||{})||{}).odds);
+      if(v==null)return null;
+      const str=String(v).trim();
+      if(str.charAt(0)!=='+'&&str.charAt(0)!=='-')return null;
+      const n=Math.abs(parseFloat(str));
+      if(!isFinite(n)||n<=0)return null;
+      return Math.round((str.charAt(0)==='+'?1+n/100:1+100/n)*100)/100;
+    }
+    const c1=dec('home'),cx=dec('draw'),c2=dec('away');
+    if(!(c1>1&&cx>1&&c2>1))return;
+    let hm=null,aw=null;
+    (comps.competitors||[]).forEach(c=>{if(c.homeAway==='home')hm=((c.team||{}).displayName)||null;else if(c.homeAway==='away')aw=((c.team||{}).displayName)||null;});
+    if(!hm||!aw)return;
+    map[rs15Norm(hm)+'|'+rs15Norm(aw)]={o1:c1,ox:cx,o2:c2,n:1};
+  });
+  return map;
+}
+/* sofa multi-book odds by name-match (when ESPN is primary and Sofa is reachable) */
+async function rs15SofaOddsForNames(dateStr,needKeys){
+  const evs=await rs15SofaDay(dateStr,true);
+  const matched=evs.filter(e=>needKeys.indexOf(rs15Norm(e.home)+'|'+rs15Norm(e.away))>=0).slice(0,60);
+  const map={};
+  for(let i=0;i<matched.length;i+=4){
+    const rows=await Promise.all(matched.slice(i,i+4).map(async e=>{
+      try{
+        const od=await rs15SOFA('/event/'+e.id+'/odds/summary');
+        const books=rs15Books(od||{});
+        if(!books.length)return null;
+        let a=0,x=0,b=0;books.forEach(B=>{a+=B.o1;x+=B.ox;b+=B.o2;});
+        return [rs15Norm(e.home)+'|'+rs15Norm(e.away),{o1:a/books.length,ox:x/books.length,o2:b/books.length,n:books.length}];
+      }catch(err){return null;}
+    }));
+    rows.forEach(r=>{if(r)map[r[0]]=r[1];});
+    if(i+4<matched.length) await new Promise(r=>setTimeout(r,RS15.PACE));
+  }
+  return map;
+}
+function rs15CrossFill(rows,map){
+  if(!map)return rows;
+  return rows.map(r=>{
+    if(r.bookie_home!=null)return r;
+    const od=map[rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team)];
+    if(!od)return r;
+    return rs15Mk(r._fx,od,r._rh,r._ra);
+  });
 }
 async function rs15Direct(dateStr,prov){
   const today=rs15LocalDate(0);
@@ -655,17 +729,103 @@ async function rs15Direct(dateStr,prov){
         const seen={};list=list.concat(tmrw.filter(f=>{const k=f.home+'|'+f.away;if(seen[k])return false;seen[k]=1;return true;}));
       }
       if(list.length){
-        const fx=await rs15Enrich(list,(d,t)=>{const st=document.getElementById('status');if(st)st.textContent='Pricing + rating '+d+' / '+t+' fixtures…';});
-        if(fx.length)return {fixtures:fx,provider:'SofaScore',note:'every fixture · multi-book averaged odds · last-10 team ratings'};
+        let fx=await rs15Enrich(list,(d,t)=>{const st=document.getElementById('status');if(st)st.textContent='Pricing + rating '+d+' / '+t+' fixtures…';});
+        if(fx.length){
+          /* anything SofaScore couldn't price -> try ESPN DraftKings by name */
+          if(fx.some(r=>r.bookie_home==null)){
+            try{ fx=rs15CrossFill(fx,await rs15EspnOddsMap(useDate)); }catch(e){}
+          }
+          fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+          return {fixtures:fx,provider:'SofaScore',note:'every fixture · multi-book averaged odds · last-10 team ratings'};
+        }
       }
     }catch(e){console.warn('sofa direct failed',e.message);}
   }
   const elist=await rs15EspnDay(useDate);
   if(elist.length){
-    const fx=await rs15Enrich(elist.map(f=>Object.assign({src:'espn'},f)),null);
-    if(fx.length)return {fixtures:fx,provider:'ESPN',note:'every league · DraftKings prices'};
+    let fx=await rs15Enrich(elist.map(f=>Object.assign({src:'espn'},f)),null);
+    if(fx.length){
+      /* anything ESPN couldn't price -> try SofaScore multi-book by name */
+      if(fx.some(r=>r.bookie_home==null)){
+        try{
+          const need=fx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
+          fx=rs15CrossFill(fx,await rs15SofaOddsForNames(useDate,need));
+        }catch(e){}
+      }
+      fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+      return {fixtures:fx,provider:'ESPN',note:'every league · DraftKings prices'};
+    }
   }
   throw new Error('no live fixtures reachable from either source');
+}
+
+/* ===== v16 auto-prediction log + auto-settle ===== */
+function predLog(){try{return JSON.parse(localStorage.getItem('rs15_preds')||'[]');}catch(e){return [];}}
+function predSave(l){try{localStorage.setItem('rs15_preds',JSON.stringify(l.slice(-400)));}catch(e){}}
+function logPredictions(list){
+  const l=predLog();const seen={};
+  l.forEach(e=>{seen[String(e.id)]=1;});
+  (list||[]).forEach(f=>{
+    if(!f.pred||f.is_past||seen[String(f.id)])return;
+    l.push({id:String(f.id),date:(f.kickoff||'').slice(0,10),home:f.home_team,away:f.away_team,
+      pick:f.pred.pick,label:f.pred.label,prob:f.pred.prob,basis:f.pred.basis,
+      kickoff:f.kickoff,wl:null,result:null});
+    seen[String(f.id)]=1;
+  });
+  predSave(l);
+}
+async function rs15ResultsFor(dateStr){
+  const ymd=(dateStr||'').replace(/-/g,'');
+  const map={};
+  function put(h,a,hs,as){
+    map[rs15Norm(h)+'|'+rs15Norm(a)]={score:hs+'-'+as,outcome:hs>as?'home_win':(hs===as?'draw':'away_win')};
+  }
+  try{
+    const d=await rs15ESPN('/apis/site/v2/sports/soccer/all/scoreboard?dates='+ymd+'&limit=500');
+    ((((d||{}).events)||[])).forEach(e=>{
+      if((((e.status||{}).type)||{}).state!=='post')return;
+      const comps=((e.competitions||[{}])[0]);
+      let hm=null,aw=null,hs=null,as=null;
+      (comps.competitors||[]).forEach(c=>{
+        if(c.homeAway==='home'){hm=((c.team||{}).displayName)||null;hs=parseGoalSafe(c.score);}
+        else if(c.homeAway==='away'){aw=((c.team||{}).displayName)||null;as=parseGoalSafe(c.score);}
+      });
+      if(hm&&aw&&hs!=null&&as!=null)put(hm,aw,hs,as);
+    });
+  }catch(e){}
+  if(Object.keys(map).length)return map;
+  try{
+    const evs=await rs15SofaDay(dateStr,true);
+    evs.forEach(e=>{if(e.is_past&&e.home_score!=null&&e.away_score!=null)put(e.home,e.away,e.home_score,e.away_score);});
+  }catch(e){}
+  return map;
+}
+async function autoSettle(){
+  const l=predLog();
+  const now=Date.now();
+  const pend=l.filter(e=>!e.wl&&e.kickoff&&new Date(e.kickoff).getTime()+105*60000<now);
+  if(!pend.length)return 0;
+  const byDate={};
+  pend.forEach(e=>{const d=e.date||new Date(e.kickoff).toISOString().slice(0,10);if(!byDate[d])byDate[d]=[];byDate[d].push(e);});
+  let graded=0;
+  for(const d of Object.keys(byDate)){
+    let results=null;
+    try{results=await rs15ResultsFor(d);}catch(e){}
+    if(!results)continue;
+    byDate[d].forEach(e=>{
+      const r=results[rs15Norm(e.home)+'|'+rs15Norm(e.away)];
+      if(!r)return;
+      e.result=r.score;
+      e.wl=(r.outcome===e.pick)?'W':'L';
+      graded++;
+    });
+  }
+  if(graded){
+    predSave(l);
+    try{renderBoard(fixtures);}catch(e){}
+    toast('Predictions settled — '+graded+' graded, ticks on the board',true);
+  }
+  return graded;
 }
 
 async function capture(){
@@ -686,10 +846,12 @@ async function capture(){
     const forms=fixtures.filter(f=>f.basis==='FORM').length;
     $('#status').textContent=`Captured ${fixtures.length} real fixtures from ${res.provider} (${withOdds} priced · ${forms} form-rated) • auto-scanning…`;
     toast(`Captured ${fixtures.length} real fixtures from ${res.provider}`, true);
+    if(!dateVal) logPredictions(fixtures);
     renderBoard(fixtures);
     try{ renderXGTable(fixtures); }catch(e){}
     try{ updateLeagueChips(fixtures); }catch(e){}
     setTimeout(scan,400);
+    setTimeout(autoSettle,2500);
   }catch(e){
     fixtures=[];scanned=[];
     renderBoard([]);
@@ -706,6 +868,7 @@ async function scan(){
   const btn=$('#btnScan'); btn.disabled=true; btn.textContent='⏳ Scanning…';
   try{
     const conf=(e,p,x)=>{ const b=Math.min(e*4,40), ps=Math.abs((p||0.5)-0.5)*60, xb=Math.min(Math.abs((x||2.5)-2.5)*8,20); const sc=Math.min(98,b+ps+xb+10); const label=e<5?'LOW':e<12?'MED':e<20?'HIGH':'MAX'; return {score:Math.round(sc),label}; };
+    const wlMap2={};predLog().forEach(e=>{wlMap2[String(e.id)]=e;});
     scanned=fixtures.map(f=>{
       const hx=Number(f.home_xg||1.35), ax=Number(f.away_xg||1.15);
       const probs=f.probs||{};
@@ -716,6 +879,7 @@ async function scan(){
       let best=null;
       if(f.basis==='FORM'&&eh>5) best={market:'1X2',pick:f.home_team+' HOME',odds:bh,edge:eh,conf:conf(eh,probs.home_win,hx+ax)};
       return {id:f.id,league:f.league,home_team:f.home_team,away_team:f.away_team,
+        pred:f.pred,wl:wlMap2[String(f.id)]&&wlMap2[String(f.id)].wl,
         home_xg:hx,away_xg:ax,probs:probs,basis:f.basis,n_books:f.n_books,source:f.source,
         true_home:th,true_over25:to2,true_btts_yes:tb,bookie_home:bh,
         bookie_over25:null,bookie_btts_yes:null,best:best};
@@ -735,7 +899,12 @@ async function scan(){
 
 function renderBoard(list){
   if(!list.length){ $('#board').innerHTML='<div class="empty" style="grid-column:1/-1">No fixtures — capture or add manual below</div>'; return; }
-  $('#board').innerHTML=list.map(f=>{
+  const wlMap={}; predLog().forEach(e=>{wlMap[String(e.id)]=e;});
+  const gw=Object.keys(wlMap).filter(k=>wlMap[k].wl==='W').length;
+  const gl=Object.keys(wlMap).filter(k=>wlMap[k].wl==='L').length;
+  const gp=Object.keys(wlMap).filter(k=>!wlMap[k].wl).length;
+  const rec=(gw+gl+gp)?('<div class="tiny" style="grid-column:1/-1;margin:0 0 8px;color:var(--muted);font-family:JetBrains Mono,monospace">🔮 PREDICTIONS: <b style="color:#00E676">'+gw+'W</b> · <b style="color:#FF5C7A">'+gl+'L</b>'+((gw+gl)?(' · '+Math.round(gw/(gw+gl)*100)+'% hit'):'')+' · '+gp+' pending — auto-graded when matches finish</div>'):'';
+  $('#board').innerHTML=rec+list.map(f=>{
     try{
     const hx = Number(f.home_xg||1.5), ax = Number(f.away_xg||1.3);
     const th = Number(f.true_home||f.true_home_odds||0), to2 = Number(f.true_over25||0), tb = Number(f.true_btts_yes||0);
@@ -747,9 +916,12 @@ function renderBoard(list){
     const hasAny = hasH||hasO||hasB;
     const topEdge = Math.max(eh,eo,eb);
     const flag = hasAny ? `<div class="instant-flag">⚡ +${topEdge}% INSTANT +EV</div>` : '';
+    const pe=wlMap[String(f.id)];
+    const predChip=(f.pred?('<div class="tiny" style="margin:2px 0;font-family:JetBrains Mono,monospace">🔮 '+f.pred.label+' '+Math.round((f.pred.prob||0)*100)+'%'+(f.pred.basis!=='FORM'?' <span style="opacity:.6">(mkt)</span>':'')+(pe&&pe.wl==='W'?' <b style="color:#00E676">✅ W</b>':(pe&&pe.wl==='L'?' <b style="color:#FF5C7A">❌ L</b>':''))+'</div>'):'');
     return `
     <div class="card ${hasAny?'edge':''}" style="${hasAny? 'border-color:rgba(0,230,118,0.35)':''}">
       ${flag}
+      ${predChip}
       <div class="card-head"><span><span class="badge-league ${leagueClass}">${f.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700;color:var(--text)">${f.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${hx.toFixed(2)} - ${ax.toFixed(2)} <span style="color:var(--muted)">xG</span></span></div>
       <div class="card-body">
         <div class="teams"><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.home_team||'Home'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div><div class="vs" style="font-family:Bebas Neue,sans-serif;font-size:12px;background:var(--warn);color:#000;border:none">VS</div><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.away_team||'Away'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div></div>
@@ -782,6 +954,7 @@ function renderScan(list){
     <div class="card ${b?'edge':''} ${isTop3?'market-top':''}">
       ${isTop3? `<div class="rank-badge">#${rank+1}</div>`:''}
       ${b? `<div class="instant-flag" style="background:linear-gradient(135deg,#00E676,#00E5FF);">🔥 +${b.edge}% BEST +EV</div>`:''}
+      ${s.pred?`<div class="tiny" style="font-family:JetBrains Mono,monospace;margin:2px 0">🔮 ${s.pred.label} ${Math.round((s.pred.prob||0)*100)}%${s.pred.basis!=='FORM'?' (mkt)':''}${s.wl==='W'?' <b style="color:#00E676">✅ W</b>':(s.wl==='L'?' <b style="color:#FF5C7A">❌ L</b>':'')}</div>`:''}
       <div class="card-head"><span><span class="badge-league ${(s.league||'').replace(/\s+/g,'')}">${s.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700">${s.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${hx.toFixed(2)}-${ax.toFixed(2)} <span style="color:var(--muted)">xG</span></span></div>
       <div class="card-body">
         <div class="teams"><div class="team"><b>${s.home_team||'Home'}</b></div><div class="vs">VS</div><div class="team"><b>${s.away_team||'Away'}</b></div></div>
@@ -808,7 +981,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v15';
+let BUILD_VERSION = 'v16';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
@@ -892,6 +1065,7 @@ window.addEventListener('load', ()=>{
       }
     }
   }, 600);
+  setTimeout(()=>{try{autoSettle();}catch(e){}},5000);
 
 });
 
@@ -900,6 +1074,7 @@ window.addEventListener('load', ()=>{
 (function(){
   // every 5 min: if date rolled over, pull fresh fixtures
   setInterval(()=>{
+    try{ autoSettle(); }catch(e){}
     const todayStr=new Date().toISOString().slice(0,10);
     if(SERVER_DATE && todayStr!==SERVER_DATE){
       console.log('date rolled over',SERVER_DATE,'->',todayStr,'auto-refreshing');
