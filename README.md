@@ -13,6 +13,12 @@
 - **League chips** + `All Global (44)` filter.
 - **Auto-upgrade**: checks `build-version` every 30min → clears cache + reload.
 
+## 📲 Download the Android APK (direct)
+
+**[`Real-Scanner-v15.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v15.apk)** — debug build, no signing needed to install.
+
+On your phone: open the link → let it download → tap the file → allow *Install unknown apps* if asked. The app runs fullscreen with its own icon, auto-pulls every fixture on open, and the engine is identical to the web version at **https://dejay-30.github.io/real-scanner-mobile/**.
+
 ## Run as PWA (instant)
 Just open the Flask server `https://your-server/` on phone → **Add to Home Screen** → standalone.
 
