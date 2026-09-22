@@ -43,6 +43,14 @@ Push to `main` triggers `.github/workflows/build-apk.yml` → builds debug APK (
 `www/icon-192.png` / `www/icon-512.png` — used for splash + launcher.
 
 ## Version
+`v15-2026-09-22` — EVERY-fixture capture + honesty fixes:
+- **SofaScore primary source** (client-side): every not-started fixture on the wire, real multi-book averaged 1X2, per-team ATK/DEF from the last 10 real matches (home_xg = ATK_home x DEF_away).
+- **ESPN fallback uses `all/scoreboard` + `limit=500`** — every league ESPN carries (118+ today vs the old 13-league/44 list), no hardcoded slug list.
+- **No invented odds, ever.** Missing prices are `null` (shown as —) instead of the old `true x uniform` fill-ins; BTTS bookie prices are never fabricated; +EV is flagged ONLY when a real book price beats the FORM model's true odds.
+- **Stale preload removed** — the standalone no longer ships a frozen 44-fixture snapshot; it auto-captures fresh on open.
+- **Demo fixtures removed** — capture failure shows an honest empty state, never fake data.
+- Flask backend (`app.py`) patched to match: every league, real DraftKings prices only, manual adds without odds carry no odds.
+
 `v14-2026-09-20` — auto-pull + auto-upgrade + 44 fixtures.
 
 ---

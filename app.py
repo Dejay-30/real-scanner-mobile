@@ -270,11 +270,11 @@ def fetch_espn_fixtures(league_filter="all", count=8, dates=None, days=1):
         if slug:
             slugs = [slug]
         else:
-            return [], f"No ESPN coverage for {league_filter} — using demo fallback"
+            return [], f"No ESPN coverage for {league_filter}"
     elif league_filter != "all":
         slugs = [ESPN_SLUG_MAP.get(league_filter, "eng.1")]
     else:
-        slugs = ALL_SLUGS
+        slugs = ["all"]   # v15: EVERY league ESPN carries, not a hardcoded 13
     fixtures = []
     ts = datetime.now().isoformat()
     for dte in multi_dates:
@@ -283,7 +283,7 @@ def fetch_espn_fixtures(league_filter="all", count=8, dates=None, days=1):
             if count != 500 and len(fixtures) >= count:
                 break
             try:
-                url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/scoreboard"
+                url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/scoreboard?limit=500"
                 # ESPN WAF blocks browser UA, but allows curl/python — use curl UA (short timeout so UI never hangs)
                 r = requests.get(url, params={"dates": dte}, timeout=5, headers={"User-Agent":"curl/7.88", "Accept":"application/json"})
                 if r.status_code != 200:
@@ -390,15 +390,10 @@ def fetch_espn_fixtures(league_filter="all", count=8, dates=None, days=1):
                                     book_over = american_to_decimal(ov["odds"])
                                 if un and un.get("odds"):
                                     book_under = american_to_decimal(un["odds"])
-                        # fallback to simulated if real not found
-                        def bp_fallback(t): return round(t * random.uniform(0.92,1.18),2)
-                        if book_home is None: book_home = bp_fallback(true_home)
-                        if book_draw is None: book_draw = bp_fallback(true_draw)
-                        if book_away is None: book_away = bp_fallback(true_away)
-                        if book_over is None: book_over = bp_fallback(true_over)
-                        if book_under is None: book_under = bp_fallback(true_under)
-                        book_btts_y = bp_fallback(true_btts_y)
-                        book_btts_n = bp_fallback(true_btts_n)
+                        # v15: NO invented prices. Missing stays None — the app
+                        # shows an unpriced cell instead of a fake edge.
+                        book_btts_y = None
+                        book_btts_n = None
                         fid = e.get("id", str(uuid.uuid4())[:8].upper())[:8].upper()
                         is_past = (status.lower() in ["status_final", "final", "ft", "fulltime"] or (home_score is not None and away_score is not None))
                         fixtures.append({
@@ -410,11 +405,11 @@ def fetch_espn_fixtures(league_filter="all", count=8, dates=None, days=1):
                             "true_over25": true_over, "true_under25": true_under, "true_btts_yes": true_btts_y, "true_btts_no": true_btts_n,
                             "bookie_home": book_home, "bookie_draw": book_draw, "bookie_away": book_away,
                             "bookie_over25": book_over, "bookie_under25": book_under, "bookie_btts_yes": book_btts_y, "bookie_btts_no": book_btts_n,
-                            "edge_home": round((book_home-true_home)/true_home*100,1) if book_home>true_home else 0,
-                            "edge_over": round((book_over-true_over)/true_over*100,1) if book_over>true_over else 0,
-                            "edge_btts": round((book_btts_y-true_btts_y)/true_btts_y*100,1) if book_btts_y>true_btts_y else 0,
-                            "has_value_home": book_home>true_home, "has_value_over": book_over>true_over, "has_value_under": book_under>true_under, "has_value_btts_yes": book_btts_y>true_btts_y,
-                            "conf_home": confidence_score(round((book_home-true_home)/true_home*100,1) if book_home>true_home else 0, probs["home_win"], hg+ag),
+                            "edge_home": round((book_home-true_home)/true_home*100,1) if (book_home is not None and book_home>true_home) else 0,
+                            "edge_over": round((book_over-true_over)/true_over*100,1) if (book_over is not None and book_over>true_over) else 0,
+                            "edge_btts": 0,
+                            "has_value_home": (book_home is not None and book_home>true_home), "has_value_over": (book_over is not None and book_over>true_over), "has_value_under": (book_under is not None and book_under>true_under), "has_value_btts_yes": False,
+                            "conf_home": confidence_score(round((book_home-true_home)/true_home*100,1) if (book_home is not None and book_home>true_home) else 0, probs["home_win"], hg+ag),
                             "status": status,
                             "source": "espn FREE (no key)"
                         })
@@ -737,13 +732,12 @@ def api_real_fixtures():
         hxg=float(data.get("home_xg",1.8))
         axg=float(data.get("away_xg",1.3))
         probs=calculate_poisson_probs(hxg, axg)
-        bh=float(data.get("bookie_home", bookie_price(round(1/probs["home_win"],2))))
-        bd=float(data.get("bookie_draw", bookie_price(round(1/probs["draw"],2))))
-        ba=float(data.get("bookie_away", bookie_price(round(1/probs["away_win"],2))))
-        bo=float(data.get("bookie_over25", bookie_price(round(1/probs["over25"],2))))
-        bu=float(data.get("bookie_under25", bookie_price(round(1/probs["under25"],2))))
-        by=float(data.get("bookie_btts_yes", bookie_price(round(1/probs["btts_yes"],2))))
-        bn=float(data.get("bookie_btts_no", bookie_price(round(1/probs["btts_no"],2))))
+        # v15: no invented prices — manual adds without odds simply carry no odds
+        bh=data.get("bookie_home"); bd=data.get("bookie_draw"); ba=data.get("bookie_away")
+        bo=data.get("bookie_over25"); bu=data.get("bookie_under25")
+        by=data.get("bookie_btts_yes"); bn=data.get("bookie_btts_no")
+        for _k,_v in (("bh",bh),("bd",bd),("ba",ba),("bo",bo),("bu",bu),("by",by),("bn",bn)):
+            if _v is not None: float(_v)
         # compute derived fields for instant render without extra scan
         true_home = round(1/probs["home_win"],2) if probs["home_win"]>0.02 else 9.5
         true_draw = round(1/probs["draw"],2)
@@ -752,9 +746,9 @@ def api_real_fixtures():
         true_under = round(1/probs["under25"],2)
         true_btts_y = round(1/probs["btts_yes"],2)
         true_btts_n = round(1/probs["btts_no"],2)
-        edge_home = round((bh-true_home)/true_home*100,1) if bh>true_home else 0
-        edge_over = round((bo-true_over)/true_over*100,1) if bo>true_over else 0
-        edge_btts = round((by-true_btts_y)/true_btts_y*100,1) if by>true_btts_y else 0
+        edge_home = round((bh-true_home)/true_home*100,1) if (bh is not None and bh>true_home) else 0
+        edge_over = round((bo-true_over)/true_over*100,1) if (bo is not None and bo>true_over) else 0
+        edge_btts = round((by-true_btts_y)/true_btts_y*100,1) if (by is not None and by>true_btts_y) else 0
         fixture={
             "id":fid,"timestamp":ts,"kickoff":ts,"league":league,
             "home_team":home,"away_team":away,
@@ -763,7 +757,7 @@ def api_real_fixtures():
             "true_over25":true_over,"true_under25":true_under,"true_btts_yes":true_btts_y,"true_btts_no":true_btts_n,
             "bookie_home":bh,"bookie_draw":bd,"bookie_away":ba,"bookie_over25":bo,"bookie_under25":bu,"bookie_btts_yes":by,"bookie_btts_no":bn,
             "edge_home":edge_home,"edge_over":edge_over,"edge_btts":edge_btts,
-            "has_value_home":bh>true_home,"has_value_over":bo>true_over,"has_value_under":bu>true_under,"has_value_btts_yes":by>true_btts_y,
+            "has_value_home":(bh is not None and bh>true_home),"has_value_over":(bo is not None and bo>true_over),"has_value_under":(bu is not None and bu>true_under),"has_value_btts_yes":(by is not None and by>true_btts_y),
             "conf_home": confidence_score(edge_home, probs["home_win"], hxg+axg),
             "source":"manual"
         }
