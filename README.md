@@ -15,7 +15,7 @@
 
 ## 📲 Download the Android APK (direct)
 
-**[`Real-Scanner-v17.1.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v17.1.apk)** — debug build, no signing needed to install. v17.1: ESPN summary-odds pricing layer + honest version label (header now shows the real build).
+**[`Real-Scanner-v17.2.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v17.2.apk)** — debug build, no signing needed to install. v17.2: every unpriced fixture now attempted via ESPN DraftKings (sweep cap 80→200); honest version label in header.
 
 On your phone: open the link → let it download → tap the file → allow *Install unknown apps* if asked. The app runs fullscreen with its own icon, auto-pulls every fixture on open, and the engine is identical to the web version at **https://dejay-30.github.io/real-scanner-mobile/**.
 
