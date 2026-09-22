@@ -15,7 +15,7 @@
 
 ## 📲 Download the Android APK (direct)
 
-**[`Real-Scanner-v17.4.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v17.4.apk)** — debug build, no signing needed to install. v17.4: board shows not-started matches with live prices (books delist 1X2 at kickoff); auto-predictions with W/L ticks on every fixture.
+**[`Real-Scanner-v18.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v18.apk)** — debug build, no signing needed to install. **v18 = always-current shell: the app loads the live version from the web, so this is the LAST APK you ever need to install — every future update arrives automatically.**
 
 On your phone: open the link → let it download → tap the file → allow *Install unknown apps* if asked. The app runs fullscreen with its own icon, auto-pulls every fixture on open, and the engine is identical to the web version at **https://dejay-30.github.io/real-scanner-mobile/**.
 
