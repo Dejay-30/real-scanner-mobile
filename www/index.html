@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v18.1">
+<meta name="build-version" content="v18.2">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -156,7 +156,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.1</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.2</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" style="padding:6px 10px;font-size:11px" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);" title="Clear phone cache">↻ Reset</button>
@@ -404,7 +404,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.1"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.2"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null;
@@ -814,6 +814,26 @@ async function rs15Direct(dateStr,prov){
       if(fx.some(r=>r.bookie_home==null)){
         try{ fx=await rs15EspnPrice(fx,useDate); }catch(e){}
       }
+      /* v18.2: thin pricing (off-peak) -> append tomorrow's not-started fixtures,
+         priced by the same three layers, so the board always carries real prices */
+      if(fx.filter(r=>r.bookie_home!=null).length<15&&!wantPast){
+        try{
+          const tmr=rs15LocalDate(1);
+          const tlist=(await rs15EspnDay(tmr)).filter(f=>f.status!=='post'&&f.status!=='in').slice(0,150);
+          if(tlist.length){
+            let tfx=await rs15Enrich(tlist.map(f=>Object.assign({src:'espn'},f)),null);
+            if(tfx.some(r=>r.bookie_home==null)){
+              try{
+                const need=tfx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
+                tfx=rs15CrossFill(tfx,await rs15SofaOddsForNames(tmr,need));
+              }catch(e){}
+            }
+            if(tfx.some(r=>r.bookie_home==null)){ try{ tfx=await rs15EspnPrice(tfx,tmr); }catch(e){} }
+            tfx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+            fx=fx.concat(tfx);
+          }
+        }catch(e){}
+      }
       fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
       return {fixtures:fx,provider:'ESPN',note:'every league · DraftKings prices'};
     }
@@ -1043,7 +1063,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v18.1';
+let BUILD_VERSION = 'v18.2';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){

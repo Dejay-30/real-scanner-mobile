@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
-<link rel="manifest" href="/manifest.json">
-<meta name="build-version" content="{{ build_version if build_version is defined else 'v14' }}">
-<meta name="server-date" content="{{ server_date if server_date is defined else '' }}">
+<link rel="manifest" href="manifest.json">
+<meta name="build-version" content="v18.2">
+<meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -156,7 +156,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN</p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.2</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" style="padding:6px 10px;font-size:11px" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);" title="Clear phone cache">↻ Reset</button>
@@ -187,7 +187,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
     </div>
     <div class="panel">
       <h3>CAPTURE SETTINGS</h3>
-      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">PROVIDER — FREE first</label><select id="provider" class="select"><option value="espn" selected>🟢 ESPN FREE — Live scheduled + DraftKings odds (no key) ✅</option><option value="free2">🟣 OPEN FREE 2 — OpenLigaDB + OpenFootball (no key) ✅</option><option value="oddsapi">🔵 The Odds API — needs key</option><option value="football_data">🟡 Football-Data.org — needs token</option></select></div>
+      <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">PROVIDER — FREE first</label><select id="provider" class="select"><option value="auto" selected>🟢 AUTO — SofaScore (every fixture, multi-book odds) → ESPN fallback</option><option value="sofa">SofaScore — every fixture · real multi-book averaged odds</option><option value="espn">ESPN — every league · DraftKings prices</option></select></div>
       <div class="row">
         <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">LEAGUE</label><select id="league" class="select"><option value="all">All Global (44 today)</option><option value="EPL">EPL</option><option value="LaLiga">LaLiga</option><option value="Serie A">Serie A</option><option value="Bundesliga">Bundesliga</option><option value="Ligue 1">Ligue 1</option><option value="Primeira">Primeira</option><option value="Eredivisie">Eredivisie</option><option value="Brazil">Brazil</option><option value="NPFL">NPFL</option><option value="UCL">UCL</option><option value="CAF">CAF</option></select></div>
         <div><label style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted)">COUNT</label><select id="count" class="select"><option value="all" selected>All (day)</option><option value="6">6</option><option value="8">8</option><option value="12">12</option><option value="30">30</option></select></div>
@@ -403,8 +403,8 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </div>
 
 <div class="toast" id="toast"></div>
-<script id="preload" type="application/json">{{ preloaded|safe if preloaded is defined else "[]" }}</script>
-<script id="server-meta" type="application/json">{"server_date":"{{ server_date if server_date is defined else '' }}","build_version":"{{ build_version if build_version is defined else 'v14' }}"}</script>
+<script id="preload" type="application/json">[]</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.2"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null;
@@ -472,218 +472,551 @@ $('#provider').addEventListener('change',()=>{
 
 });
 
-async function capture(){
-  const p0=$('#provider').value, lg=$('#league').value, c=$('#count').value;
-  const btn=document.getElementById('btnFetch');
-  if(btn){ btn.disabled=true; btn.textContent='⏳ Capturing…'; }
-  // failsafe 8s - phone must never stay stuck
-  const failSafe=setTimeout(()=>{ try{ forceUnstick(); }catch(e){} toast('Still capturing… tap ↻ Reset if stuck', false); }, 8000);
-  // extra hard failsafe 12s
-  const hardFail=setTimeout(()=>{ try{ forceUnstick(); }catch(e){} }, 12000);
-  let lastErr=null;
-  try{
-  $('#status').textContent=`Capturing ${lg} • ${p0} • ${c} fixtures…`;
-  // try order: selected → other free → paid (deduplicated)
-  const tryList=[p0];
-  for(const cand of ['espn','free2','oddsapi']) if(cand!==p0 && !tryList.includes(cand)) tryList.push(cand);
-  for(let idx=0; idx<tryList.length; idx++){
-    const p=tryList[idx];
+/* ===== v15 DIRECT CAPTURE — every real fixture, real odds only ===== */
+const RS15={AVG:1.35,HOME:1.12,AWAY:0.93,MIN_N:5,MAX_FIX:400,CHUNK:4,PACE:300,SUM_CAP:200};
+const RS15C={teams:{}};
+function esc15(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function rs15SOFA(p){return fetch('https://api.sofascore.com/api/v1'+p,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
+function rs15ESPN(p){return fetch('https://site.web.api.espn.com'+p,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})['catch'](()=>{if(location.protocol!=='http:'&&location.protocol!=='https:')return null;return fetch('/espnw'+p,{headers:{'Accept':'application/json'}}).then(r=>r.ok?r.json():null)['catch'](()=>null);});}
+function rs15Books(d){
+  const out=[];
+  function of_(o){
+    if(!o)return null;
+    const a=parseFloat(o['1']!=null?o['1']:(o.home!=null?o.home:o.o1)),
+          x=parseFloat(o['X']!=null?o['X']:(o.draw!=null?o.draw:o.ox)),
+          b=parseFloat(o['2']!=null?o['2']:(o.away!=null?o.away:o.o2));
+    return (a>1&&x>1&&b>1)?{o1:a,ox:x,o2:b}:null;
+  }
+  ((d&&d.odds)||[]).forEach(bm=>{
+    let o=of_(bm.odds);
+    if(!o&&bm.choices){const c={};bm.choices.forEach(ch=>{c[ch.name||ch.choice]=parseFloat(ch.odd||ch.oddsValue||ch.odds);});o=of_(c);}
+    if(o)out.push(o);
+  });
+  return out;
+}
+function rs15Devig(o1,ox,o2){const a=1/o1,x=1/ox,b=1/o2,t=a+x+b;return {h:a/t,d:x/t,a:b/t};}
+function rs15Row(lam,n){const r=[Math.exp(-lam)];for(let i=1;i<=n;i++)r[i]=r[i-1]*lam/i;return r;}
+function rs15Grid(lh,la){
+  const ph=rs15Row(lh,10),pa=rs15Row(la,10);let h=0,d=0,a=0,o25=0,u25=0,by=0,bn=0,i,j;
+  for(i=0;i<=10;i++)for(j=0;j<=10;j++){const p=ph[i]*pa[j];
+    if(i>j)h+=p;else if(i===j)d+=p;else a+=p;
+    if(i+j>2.5)o25+=p;else u25+=p;
+    if(i>0&&j>0)by+=p;else bn+=p;}
+  const t=h+d+a;
+  return {home_win:h/t,draw:d/t,away_win:a/t,over25:o25/t,under25:u25/t,btts_yes:by/t,btts_no:bn/t};
+}
+function rs15Fit(pH,pD,pA){
+  const diff=pH-pA;
+  function splitFor(T){let lo=0.02,hi=0.98,mid,pr,i;for(i=0;i<22;i++){mid=(lo+hi)/2;pr=rs15Grid(T*mid,T*(1-mid));if(pr.home_win-pr.away_win<diff)lo=mid;else hi=mid;}return (lo+hi)/2;}
+  let lo=0.3,hi=8.0,T,sp,i;
+  for(i=0;i<24;i++){T=(lo+hi)/2;sp=splitFor(T);const pr=rs15Grid(T*sp,T*(1-sp));if(pr.draw>pD)lo=T;else hi=T;}
+  T=(lo+hi)/2;sp=splitFor(T);
+  return {lh:T*sp,la:T*(1-sp)};
+}
+function rs15Ratings(tid){
+  if(tid==null)return Promise.resolve(null);
+  if(RS15C.teams[tid]!==undefined)return Promise.resolve(RS15C.teams[tid]);
+  return rs15SOFA('/team/'+tid+'/events/last/0').then(d=>{
+    let gf=0,ga=0,n=0;
+    (((d||{}).events)||[]).forEach(e=>{
+      const st=e.status||{};
+      const fin=st.type==='finished'||st.type==='ended'||st.description==='FT';
+      const hs=(e.homeScore||{}).current,as=(e.awayScore||{}).current;
+      if(!fin||hs==null||as==null)return;
+      const isH=((e.homeTeam||{}).id)===tid,isA=((e.awayTeam||{}).id)===tid;
+      if(!isH&&!isA)return;
+      gf+=isH?hs:as;ga+=isH?as:hs;n++;
+    });
+    const r=(n>=RS15.MIN_N)?{atk:(gf/n)/RS15.AVG,def:(ga/n)/RS15.AVG,n:n}:null;
+    RS15C.teams[tid]=r;return r;
+  })['catch'](()=>{RS15C.teams[tid]=null;return null;});
+}
+function rs15LocalDate(off){const d=new Date(Date.now()+(off||0)*86400000);return d.toLocaleDateString('en-CA');}
+function rs15Mk(fx,odds,rh,ra){
+  let basis='MKT',lam=null;
+  if(rh&&ra){basis='FORM';lam={lh:RS15.AVG*RS15.HOME*rh.atk*ra.def,la:RS15.AVG*RS15.AWAY*ra.atk*rh.def};}
+  else if(odds){const dv=rs15Devig(odds.o1,odds.ox,odds.o2);lam=rs15Fit(dv.h,dv.d,dv.a);}
+  else {basis='MKT';lam={lh:1.35,la:1.15};}
+  const p=rs15Grid(lam.lh,lam.la);
+  const r2=x=>Math.round(x*100)/100;
+  const th=r2(1/p.home_win),td=r2(1/p.draw),ta=r2(1/p.away_win);
+  const bh=odds?r2(odds.o1):null,bd=odds?r2(odds.ox):null,ba=odds?r2(odds.o2):null;
+  /* +EV ONLY when a real book price beats the FORM model's true odds */
+  const eh=(basis==='FORM'&&bh!=null&&bh>th)?+(((bh-th)/th*100).toFixed(1)):0;
+  /* v18.1: prediction ONLY with real input (book price or form ratings).
+     No data -> no prediction. Never a manufactured identical pick. */
+  let pk=null,pl=null;
+  if(odds||(rh&&ra)){
+    pk='home_win';pl='HOME WIN';
+    if(p.draw>=p[pk]){pk='draw';pl='DRAW';}
+    if(p.away_win>=p[pk]){pk='away_win';pl='AWAY WIN';}
+  }
+  return {id:String(fx.id),league:fx.league||'Football',home_team:fx.home,away_team:fx.away,
+    pred:pk?{pick:pk,label:pl,prob:p[pk],basis:basis}:null,
+    kickoff:fx.ts?new Date(fx.ts*1000).toISOString():new Date().toISOString(),
+    home_xg:+lam.lh.toFixed(2),away_xg:+lam.la.toFixed(2),probs:p,
+    true_home:th,true_draw:td,true_away:ta,
+    true_over25:r2(1/p.over25),true_under25:r2(1/p.under25),true_btts_yes:r2(1/p.btts_yes),true_btts_no:r2(1/p.btts_no),
+    bookie_home:bh,bookie_draw:bd,bookie_away:ba,
+    bookie_over25:null,bookie_under25:null,bookie_btts_yes:null,bookie_btts_no:null,
+    edge_home:eh,edge_over:0,edge_btts:0,
+    has_value_home:eh>0,has_value_over:false,has_value_btts_yes:false,
+    status:fx.status||'',is_past:!!fx.is_past,result:fx.result||'',
+    home_score:fx.home_score,away_score:fx.away_score,
+    basis:basis,n_books:odds?odds.n:0,
+    source:(odds&&odds.n>1)?('SofaScore · '+odds.n+' books'):(odds?'ESPN · DraftKings':'no odds')};
+}
+async function rs15SofaDay(dateStr,wantPast){
+  const d=await rs15SOFA('/sport/football/scheduled-events/'+dateStr);
+  const evs=(((d||{}).events)||[]).filter(e=>((e.homeTeam||{}).name)&&((e.awayTeam||{}).name));
+  const use=evs.filter(e=>{
+    const t=(e.status||{}).type;
+    if(wantPast)return true;
+    return t==='notstarted';
+  }).slice(0,RS15.MAX_FIX);
+  const mapped=use.map(e=>{
+    const hs=(e.homeScore||{}).current,as=(e.awayScore||{}).current;
+    const fin=(e.status||{}).type!=='notstarted';
+    return {id:e.id,home:e.homeTeam.name,away:e.awayTeam.name,src:'sofa',
+      uc:(((e.homeTeam||{}).userCount)||0)+(((e.awayTeam||{}).userCount)||0),
+      hid:(e.homeTeam||{}).id||null,aid:(e.awayTeam||{}).id||null,
+      lg:((e.tournament&&e.tournament.category&&e.tournament.category.name?e.tournament.category.name+' · ':'')+(e.tournament&&e.tournament.name?e.tournament.name:'')),
+      ts:e.startTimestamp||null,status:(e.status||{}).type||'',
+      is_past:fin&&hs!=null,result:fin&&hs!=null?(hs+'-'+as):'',
+      home_score:fin?hs:null,away_score:fin?as:null};
+  });
+  /* price the matches people actually bet on first — if the wire throttles
+     the sweep mid-way, the big fixtures already carry their books */
+  mapped.sort((a,b)=>(b.uc||0)-(a.uc||0));
+  return mapped;
+}
+async function rs15EspnDay(dateStr){
+  const ymd=dateStr.replace(/-/g,'');
+  const d=await rs15ESPN('/apis/site/v2/sports/soccer/all/scoreboard?dates='+ymd+'&limit=500');
+  const out=[];
+  ((((d||{}).events)||[])).forEach(e=>{
+    const comps=((e.competitions||[{}])[0]);
+    const comps2=(comps.competitors)||[];
+    let hm=null,aw=null,hs=null,as=null;
+    comps2.forEach(c=>{
+      if(c.homeAway==='home'){hm=((c.team||{}).displayName)||null;hs=parseGoalSafe(c.score);}
+      else if(c.homeAway==='away'){aw=((c.team||{}).displayName)||null;as=parseGoalSafe(c.score);}
+    });
+    if(!hm||!aw)return;
+    const state=((((e.status||{}).type)||{}).state)||'';
+    const o=comps.odds&&comps.odds[0];
+    let odds=null;
+    if(o&&o.moneyline){
+      function dec(side){
+        const w=(o.moneyline[side]||{});
+        const v=((w.close||{}).odds)!=null?((w.close||{}).odds):(((w.open||{})||{}).odds);
+        if(v==null)return null;
+        const str=String(v).trim();
+        if(str.charAt(0)!=='+'&&str.charAt(0)!=='-')return null;
+        const n=Math.abs(parseFloat(str));
+        if(!isFinite(n)||n<=0)return null;
+        return Math.round((str.charAt(0)==='+'?1+n/100:1+100/n)*100)/100;
+      }
+      const c1=dec('home'),cx=dec('draw'),c2=dec('away');
+      if(c1>1&&cx>1&&c2>1)odds={o1:c1,ox:cx,o2:c2,n:1};
+    }
+    const lgName=(e.league&&e.league.name)||(e.leagues&&e.leagues[0]&&e.leagues[0].name)||'Football';
+    out.push({id:e.id,home:hm,away:aw,hid:null,aid:null,lg:lgName,
+      ts:e.date?Math.floor(Date.parse(e.date)/1000):null,
+      status:state,is_past:state==='post',
+      result:state==='post'&&hs!=null&&as!=null?(hs+'-'+as):'',
+      home_score:state==='post'?hs:null,away_score:state==='post'?as:null,odds:odds});
+  });
+  return out;
+}
+function parseGoalSafe(v){const n=parseInt(v,10);return isFinite(n)?n:null;}
+async function rs15Enrich(list,prog){
+  const out=[];
+  for(let st=0;st<list.length;st+=RS15.CHUNK){
+    const part=list.slice(st,st+RS15.CHUNK);
+    const rows=await Promise.all(part.map(async fx=>{
+      try{
+        let odds=fx.odds||null;
+        if(!odds&&fx.src!=='espn'){
+          /* two attempts with a beat between — the wire throttles bursts */
+          for(let att=0;att<2&&!odds;att++){
+            try{
+              const od=await rs15SOFA('/event/'+fx.id+'/odds/summary');
+              const books=rs15Books(od||{});
+              if(books.length){let a=0,x=0,b=0;books.forEach(B=>{a+=B.o1;x+=B.ox;b+=B.o2;});odds={o1:a/books.length,ox:x/books.length,o2:b/books.length,n:books.length};}
+            }catch(e){ if(att===0) await new Promise(r=>setTimeout(r,600)); }
+          }
+        }
+        let rh=null,ra=null;
+        if(fx.hid!=null||fx.aid!=null){
+          const rr=await Promise.all([rs15Ratings(fx.hid),rs15Ratings(fx.aid)]);
+          rh=rr[0];ra=rr[1];
+        }
+        const row=rs15Mk(fx,odds,rh,ra);
+        row._fx=fx;row._rh=rh;row._ra=ra;   /* kept for cross-fill odds swaps */
+        return row;
+      }catch(e){return null;}
+    }));
+    rows.forEach(r=>{if(r)out.push(r);});
+    if(prog)prog(Math.min(st+RS15.CHUNK,list.length),list.length);
+    if(st+RS15.CHUNK<list.length) await new Promise(r=>setTimeout(r,RS15.PACE));
+  }
+  return out;
+}
+function rs15Norm(t){return String(t||'').toLowerCase().replace(/\b(fc|afc|cf|sc|bc|club|ac|as)\b/g,'').replace(/[^a-z]/g,'');}
+/* one scoreboard fetch -> {odds: {normHome|normAway: DraftKings 1X2}, ids: {…: espn event id}} */
+async function rs15EspnMaps(dateStr){
+  const ymd=dateStr.replace(/-/g,'');
+  const d=await rs15ESPN('/apis/site/v2/sports/soccer/all/scoreboard?dates='+ymd+'&limit=500');
+  const oddsMap={},idMap={};
+  ((((d||{}).events)||[])).forEach(e=>{
+    const comps=((e.competitions||[{}])[0]);
+    let hm=null,aw=null;
+    (comps.competitors||[]).forEach(c=>{if(c.homeAway==='home')hm=((c.team||{}).displayName)||null;else if(c.homeAway==='away')aw=((c.team||{}).displayName)||null;});
+    if(!hm||!aw)return;
+    const key=rs15Norm(hm)+'|'+rs15Norm(aw);
+    idMap[key]=String(e.id);
+    const o=(comps.odds||[])[0];
+    if(!o||!o.moneyline)return;
+    function dec(side){
+      const w=(o.moneyline[side]||{});
+      const v=((w.close||{}).odds)!=null?((w.close||{}).odds):(((w.open||{})||{}).odds);
+      if(v==null)return null;
+      const str=String(v).trim();
+      if(str.charAt(0)!=='+'&&str.charAt(0)!=='-')return null;
+      const n=Math.abs(parseFloat(str));
+      if(!isFinite(n)||n<=0)return null;
+      return Math.round((str.charAt(0)==='+'?1+n/100:1+100/n)*100)/100;
+    }
+    const c1=dec('home'),cx=dec('draw'),c2=dec('away');
+    if(c1>1&&cx>1&&c2>1)oddsMap[key]={o1:c1,ox:cx,o2:c2,n:1};
+  });
+  return {odds:oddsMap,ids:idMap};
+}
+/* v17: ESPN per-event summary odds — many real matches carry 1X2 ONLY here
+   (numeric American moneylines on homeTeamOdds/drawOdds/awayTeamOdds) */
+function rs15AmDec(v){
+  if(v==null)return null;
+  const n=parseFloat(v);
+  if(!isFinite(n)||n===0)return null;
+  return Math.round((1+(n>0?n/100:100/Math.abs(n)))*100)/100;
+}
+function rs15SummaryOddsOf(s){
+  const arr=((((s||{}).odds)||[])).concat(((((s||{}).pickcenter)||[])));
+  for(let i=0;i<arr.length;i++){
+    const o=arr[i];if(!o)continue;
+    const h=rs15AmDec((o.homeTeamOdds||{}).moneyLine),
+          x=rs15AmDec((o.drawOdds||{}).moneyLine),
+          a=rs15AmDec((o.awayTeamOdds||{}).moneyLine);
+    if(h>1&&x>1&&a>1)return {o1:h,ox:x,o2:a,n:1};
+  }
+  return null;
+}
+async function rs15EspnSummaryOdds(eid){
+  return rs15SummaryOddsOf(await rs15ESPN('/apis/site/v2/sports/soccer/all/summary?event='+eid));
+}
+/* v17: last-resort pricing pass — scoreboard cross-fill first, then a paced
+   per-event summary sweep for whatever is still unpriced (popular first) */
+async function rs15EspnPrice(rows,dateStr){
+  let maps=null;
+  try{ maps=await rs15EspnMaps(dateStr); }catch(e){}
+  if(maps)rows=rs15CrossFill(rows,maps.odds);
+  const targets=[];
+  rows.forEach(r=>{
+    if(r.bookie_home!=null||!r._fx)return;
+    const eid=(r._fx.src==='espn')?String(r._fx.id):((maps&&maps.ids[rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team)])||null);
+    if(eid)targets.push({row:r,eid:eid});
+  });
+  if(targets.length>RS15.SUM_CAP)targets.length=RS15.SUM_CAP;
+  for(let i=0;i<targets.length;i+=RS15.CHUNK){
+    try{const st=document.getElementById('status');if(st)st.textContent='💵 Pricing '+Math.min(i+RS15.CHUNK,targets.length)+' / '+targets.length+' fixtures via ESPN DraftKings…';}catch(e){}
+    const part=targets.slice(i,i+RS15.CHUNK);
+    const got=await Promise.all(part.map(async t=>{
+      try{return [t.row,await rs15EspnSummaryOdds(t.eid)];}catch(e){return null;}
+    }));
+    got.forEach(g=>{
+      if(!g||!g[1])return;
+      const idx=rows.indexOf(g[0]);
+      if(idx>=0)rows[idx]=rs15Mk(g[0]._fx,g[1],g[0]._rh,g[0]._ra);
+    });
+    if(i+RS15.CHUNK<targets.length)await new Promise(r2=>setTimeout(r2,RS15.PACE));
+  }
+  return rows;
+}
+/* sofa multi-book odds by name-match (when ESPN is primary and Sofa is reachable) */
+async function rs15SofaOddsForNames(dateStr,needKeys){
+  const evs=await rs15SofaDay(dateStr,true);
+  const matched=evs.filter(e=>needKeys.indexOf(rs15Norm(e.home)+'|'+rs15Norm(e.away))>=0).slice(0,60);
+  const map={};
+  for(let i=0;i<matched.length;i+=4){
+    const rows=await Promise.all(matched.slice(i,i+4).map(async e=>{
+      try{
+        const od=await rs15SOFA('/event/'+e.id+'/odds/summary');
+        const books=rs15Books(od||{});
+        if(!books.length)return null;
+        let a=0,x=0,b=0;books.forEach(B=>{a+=B.o1;x+=B.ox;b+=B.o2;});
+        return [rs15Norm(e.home)+'|'+rs15Norm(e.away),{o1:a/books.length,ox:x/books.length,o2:b/books.length,n:books.length}];
+      }catch(err){return null;}
+    }));
+    rows.forEach(r=>{if(r)map[r[0]]=r[1];});
+    if(i+4<matched.length) await new Promise(r=>setTimeout(r,RS15.PACE));
+  }
+  return map;
+}
+function rs15CrossFill(rows,map){
+  if(!map)return rows;
+  return rows.map(r=>{
+    if(r.bookie_home!=null)return r;
+    const od=map[rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team)];
+    if(!od)return r;
+    return rs15Mk(r._fx,od,r._rh,r._ra);
+  });
+}
+async function rs15Direct(dateStr,prov){
+  const today=rs15LocalDate(0);
+  const wantPast=!!dateStr&&dateStr<today;
+  const useDate=dateStr||today;
+  if(prov!=='espn'){
     try{
-      $('#status').textContent=`Capturing ${lg} • ${p} • ${c} fixtures… ${idx>0?`(retry ${idx})`:''}`;
-      const dateVal=document.getElementById('calDate')?.value;
-      const dateParam=dateVal? `&date=${dateVal}` : '';
-      const d=await j(`/api/jap/real_fixtures?provider=${p}&league=${encodeURIComponent(lg)}&count=${c}${dateParam}`);
-      fixtures=d.fixtures||[];
-      if(!fixtures.length) throw new Error('No fixtures returned from '+p);
-      $('#sFixtures').textContent=fixtures.length;
-      $('#sFixturesSub').textContent=d.provider + (d.fallback?` → ${d.fallback}`:'') + (d.error? ' ⚠️ '+d.error.slice(0,60):'');
-      $('#sTime').textContent=new Date().toLocaleTimeString();
-      $('#sTimeSub').textContent=(d.league||lg) + ' • ' + fixtures.length + ' fixtures • '+(d.note||'').slice(0,60);
-      $('#status').textContent=`Captured ${fixtures.length} fixtures from ${d.provider}${d.fallback?' ('+d.fallback+')':''} • auto-scanning…`;
-      if(d.error) toast((d.error+'').slice(0,80), false);
-      else toast(`Captured ${fixtures.length} from ${d.provider}${idx>0?` (fallback)`:''}`, true);
-      if(p!==p0){ $('#provider').value=p; refreshKeyStatus();
- }
-      renderBoard(fixtures);
-      try{ renderXGTable(fixtures); }catch(e){}
-      try{ updateLeagueChips(fixtures); }catch(e){}
-      setTimeout(scan,400);
-      clearTimeout(failSafe); clearTimeout(hardFail);
-      try{ const b=document.getElementById('btnFetch'); if(b){ b.disabled=false; b.textContent='🌍 Capture Fixtures'; } }catch(e){}
-      return;
-    }catch(e){
-      lastErr=e;
-      console.warn('capture try',p,'failed',e.message);
-      $('#status').textContent=`${p} failed: ${e.message.slice(0,80)} — trying next…`;
-      await new Promise(r=>setTimeout(r,500));
+      let list=await rs15SofaDay(useDate,wantPast);
+      if(!wantPast&&list.length<12&&useDate===today){
+        const tmrw=await rs15SofaDay(rs15LocalDate(1),false).catch(()=>[]);
+        const seen={};list=list.concat(tmrw.filter(f=>{const k=f.home+'|'+f.away;if(seen[k])return false;seen[k]=1;return true;}));
+      }
+      if(list.length){
+        let fx=await rs15Enrich(list,(d,t)=>{const st=document.getElementById('status');if(st)st.textContent='Pricing + rating '+d+' / '+t+' fixtures…';});
+        if(fx.length){
+          /* anything SofaScore couldn't price -> try ESPN DraftKings by name */
+          if(fx.some(r=>r.bookie_home==null)){
+            try{ fx=await rs15EspnPrice(fx,useDate); }catch(e){}
+          }
+          fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+          return {fixtures:fx,provider:'SofaScore',note:'every fixture · multi-book averaged odds · last-10 team ratings'};
+        }
+      }
+    }catch(e){console.warn('sofa direct failed',e.message);}
+  }
+  /* v17.4: today's board = not-started matches only (same rule as the SofaScore
+     path). Books delist 1X2 at kickoff - live/finished games are unpriced noise;
+     their results still arrive via calendar + auto-settle */
+  const elist=(await rs15EspnDay(useDate)).filter(f=>wantPast||(f.status!=='post'&&f.status!=='in'));
+  if(elist.length){
+    let fx=await rs15Enrich(elist.map(f=>Object.assign({src:'espn'},f)),null);
+    if(fx.length){
+      /* anything ESPN couldn't price -> try SofaScore multi-book by name */
+      if(fx.some(r=>r.bookie_home==null)){
+        try{
+          const need=fx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
+          fx=rs15CrossFill(fx,await rs15SofaOddsForNames(useDate,need));
+        }catch(e){}
+      }
+      /* still unpriced -> ESPN per-event summary sweep (real DraftKings 1X2) */
+      if(fx.some(r=>r.bookie_home==null)){
+        try{ fx=await rs15EspnPrice(fx,useDate); }catch(e){}
+      }
+      /* v18.2: thin pricing (off-peak) -> append tomorrow's not-started fixtures,
+         priced by the same three layers, so the board always carries real prices */
+      if(fx.filter(r=>r.bookie_home!=null).length<15&&!wantPast){
+        try{
+          const tmr=rs15LocalDate(1);
+          const tlist=(await rs15EspnDay(tmr)).filter(f=>f.status!=='post'&&f.status!=='in').slice(0,150);
+          if(tlist.length){
+            let tfx=await rs15Enrich(tlist.map(f=>Object.assign({src:'espn'},f)),null);
+            if(tfx.some(r=>r.bookie_home==null)){
+              try{
+                const need=tfx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
+                tfx=rs15CrossFill(tfx,await rs15SofaOddsForNames(tmr,need));
+              }catch(e){}
+            }
+            if(tfx.some(r=>r.bookie_home==null)){ try{ tfx=await rs15EspnPrice(tfx,tmr); }catch(e){} }
+            tfx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+            fx=fx.concat(tfx);
+          }
+        }catch(e){}
+      }
+      fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+      return {fixtures:fx,provider:'ESPN',note:'every league · DraftKings prices'};
     }
   }
-  $('#status').innerHTML='Capture failed after all free APIs — showing demo so board is never empty. <span style="color:var(--accent)">Tap 🌍 Capture again or add manual below</span><br><span style="font-size:10px;color:var(--muted)">Error: '+(lastErr? lastErr.message.slice(0,80):'unknown')+' — you can still add manual fixtures</span>';
-  toast('Live APIs failed — demo loaded so you can test Scan/Betslip/xG', false);
-  // fallback demo so board never empty (same as auto-load demo)
+  throw new Error('no live fixtures reachable from either source');
+}
+
+/* ===== v16 auto-prediction log + auto-settle ===== */
+function predLog(){try{return JSON.parse(localStorage.getItem('rs15_preds')||'[]');}catch(e){return [];}}
+function predSave(l){try{localStorage.setItem('rs15_preds',JSON.stringify(l.slice(-400)));}catch(e){}}
+function logPredictions(list){
+  const l=predLog();const seen={};
+  l.forEach(e=>{seen[String(e.id)]=1;});
+  (list||[]).forEach(f=>{
+    if(!f.pred||f.is_past||seen[String(f.id)])return;
+    l.push({id:String(f.id),date:(f.kickoff||'').slice(0,10),home:f.home_team,away:f.away_team,
+      pick:f.pred.pick,label:f.pred.label,prob:f.pred.prob,basis:f.pred.basis,
+      kickoff:f.kickoff,wl:null,result:null});
+    seen[String(f.id)]=1;
+  });
+  predSave(l);
+}
+async function rs15ResultsFor(dateStr){
+  const ymd=(dateStr||'').replace(/-/g,'');
+  const map={};
+  function put(h,a,hs,as){
+    map[rs15Norm(h)+'|'+rs15Norm(a)]={score:hs+'-'+as,outcome:hs>as?'home_win':(hs===as?'draw':'away_win')};
+  }
   try{
-    fixtures = [
-      {"id":"DEMO01","league":"EPL","home_team":"Arsenal","away_team":"Chelsea","home_xg":1.85,"away_xg":1.4,"true_home":2.1,"true_over25":1.7,"true_btts_yes":1.6,"bookie_home":2.45,"bookie_over25":2.05,"bookie_btts_yes":1.85,"edge_home":16,"edge_over":20,"edge_btts":15,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.58,"under25":0.42,"home_win":0.47,"draw":0.25,"away_win":0.28,"btts_yes":0.62},"kickoff":new Date().toISOString()},
-      {"id":"DEMO02","league":"LaLiga","home_team":"Real Madrid","away_team":"Barcelona","home_xg":2.1,"away_xg":1.9,"true_home":2.4,"true_over25":1.45,"true_btts_yes":1.45,"bookie_home":2.85,"bookie_over25":1.95,"bookie_btts_yes":1.75,"edge_home":18,"edge_over":34,"edge_btts":20,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.69,"under25":0.31,"home_win":0.41,"draw":0.24,"away_win":0.35,"btts_yes":0.69},"kickoff":new Date().toISOString()},
-      {"id":"DEMO03","league":"Serie A","home_team":"Inter","away_team":"Juventus","home_xg":1.9,"away_xg":1.5,"true_home":2.0,"true_over25":1.6,"true_btts_yes":1.55,"bookie_home":2.3,"bookie_over25":1.88,"bookie_btts_yes":1.9,"edge_home":15,"edge_over":17,"edge_btts":22,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.62,"under25":0.38,"home_win":0.48,"draw":0.23,"away_win":0.29,"btts_yes":0.64},"kickoff":new Date().toISOString()},
-      {"id":"DEMO04","league":"Bundesliga","home_team":"Bayern Munich","away_team":"Dortmund","home_xg":2.2,"away_xg":1.6,"true_home":1.85,"true_over25":1.4,"true_btts_yes":1.42,"bookie_home":1.95,"bookie_over25":1.75,"bookie_btts_yes":1.65,"edge_home":5.4,"edge_over":25,"edge_btts":16,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.71,"under25":0.29,"home_win":0.54,"draw":0.22,"away_win":0.24,"btts_yes":0.70},"kickoff":new Date().toISOString()}
-    ];
+    const d=await rs15ESPN('/apis/site/v2/sports/soccer/all/scoreboard?dates='+ymd+'&limit=500');
+    ((((d||{}).events)||[])).forEach(e=>{
+      if((((e.status||{}).type)||{}).state!=='post')return;
+      const comps=((e.competitions||[{}])[0]);
+      let hm=null,aw=null,hs=null,as=null;
+      (comps.competitors||[]).forEach(c=>{
+        if(c.homeAway==='home'){hm=((c.team||{}).displayName)||null;hs=parseGoalSafe(c.score);}
+        else if(c.homeAway==='away'){aw=((c.team||{}).displayName)||null;as=parseGoalSafe(c.score);}
+      });
+      if(hm&&aw&&hs!=null&&as!=null)put(hm,aw,hs,as);
+    });
+  }catch(e){}
+  if(Object.keys(map).length)return map;
+  try{
+    const evs=await rs15SofaDay(dateStr,true);
+    evs.forEach(e=>{if(e.is_past&&e.home_score!=null&&e.away_score!=null)put(e.home,e.away,e.home_score,e.away_score);});
+  }catch(e){}
+  return map;
+}
+async function autoSettle(){
+  const l=predLog();
+  const now=Date.now();
+  const pend=l.filter(e=>!e.wl&&e.kickoff&&new Date(e.kickoff).getTime()+105*60000<now);
+  if(!pend.length)return 0;
+  const byDate={};
+  pend.forEach(e=>{const d=e.date||new Date(e.kickoff).toISOString().slice(0,10);if(!byDate[d])byDate[d]=[];byDate[d].push(e);});
+  let graded=0;
+  for(const d of Object.keys(byDate)){
+    let results=null;
+    try{results=await rs15ResultsFor(d);}catch(e){}
+    if(!results)continue;
+    byDate[d].forEach(e=>{
+      const r=results[rs15Norm(e.home)+'|'+rs15Norm(e.away)];
+      if(!r)return;
+      e.result=r.score;
+      e.wl=(r.outcome===e.pick)?'W':'L';
+      graded++;
+    });
+  }
+  if(graded){
+    predSave(l);
+    try{renderBoard(fixtures);}catch(e){}
+    toast('Predictions settled — '+graded+' graded, ticks on the board',true);
+  }
+  return graded;
+}
+
+async function capture(){
+  const provEl=$('#provider'); const prov=provEl?provEl.value:'auto';
+  const btn=document.getElementById('btnFetch');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Capturing…'; }
+  const dateVal=document.getElementById('calDate')?.value;
+  try{
+    $('#status').textContent=`Capturing every ${dateVal?dateVal:'today'} fixture · ${prov==='espn'?'ESPN':'SofaScore → ESPN'}…`;
+    const res=await rs15Direct(dateVal||null,prov);
+    fixtures=res.fixtures||[];
+    if(!fixtures.length) throw new Error('no priced fixtures returned');
+    $('#sFixtures').textContent=fixtures.length;
+    $('#sFixturesSub').textContent=res.provider+' · every fixture';
+    $('#sTime').textContent=new Date().toLocaleTimeString();
+    $('#sTimeSub').textContent=res.note.slice(0,70);
+    const withOdds=fixtures.filter(f=>f.bookie_home!=null).length;
+    const forms=fixtures.filter(f=>f.basis==='FORM').length;
+    $('#status').textContent=`Captured ${fixtures.length} real fixtures from ${res.provider} (${withOdds} priced · ${forms} form-rated) • auto-scanning…`;
+    toast(`Captured ${fixtures.length} real fixtures from ${res.provider}`, true);
+    if(!dateVal) logPredictions(fixtures);
     renderBoard(fixtures);
     try{ renderXGTable(fixtures); }catch(e){}
     try{ updateLeagueChips(fixtures); }catch(e){}
     setTimeout(scan,400);
-    document.getElementById('sFixtures').textContent=fixtures.length;
-    document.getElementById('sFixturesSub').textContent='demo fallback • tap Capture to retry live';
-    document.getElementById('sTime').textContent=new Date().toLocaleTimeString();
-  }catch(e2){ console.warn(e2); }
-  try{ $('#manualHint').textContent='⚠️ Live failed — demo loaded. You can test Scan/Betslip/xG or add manual.'; }catch(e){}
-  try{ $('#manualHint').style.color='var(--warn)'; }catch(e){}
-  }catch(crashErr){
-    console.error('capture crashed', crashErr);
-    toast('Capture crashed: '+crashErr.message+' — demo loaded', false);
-    try{
-      fixtures = [
-        {"id":"DEMO01","league":"EPL","home_team":"Arsenal","away_team":"Chelsea","home_xg":1.85,"away_xg":1.4,"true_home":2.1,"true_over25":1.7,"true_btts_yes":1.6,"bookie_home":2.45,"bookie_over25":2.05,"bookie_btts_yes":1.85,"edge_home":16,"edge_over":20,"edge_btts":15,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.58,"under25":0.42,"home_win":0.47,"draw":0.25,"away_win":0.28,"btts_yes":0.62},"kickoff":new Date().toISOString()},
-        {"id":"DEMO02","league":"LaLiga","home_team":"Real Madrid","away_team":"Barcelona","home_xg":2.1,"away_xg":1.9,"true_home":2.4,"true_over25":1.45,"true_btts_yes":1.45,"bookie_home":2.85,"bookie_over25":1.95,"bookie_btts_yes":1.75,"edge_home":18,"edge_over":34,"edge_btts":20,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.69,"under25":0.31,"home_win":0.41,"draw":0.24,"away_win":0.35,"btts_yes":0.69},"kickoff":new Date().toISOString()}
-      ];
-      renderBoard(fixtures); try{ renderXGTable(fixtures);}catch(e){} try{ updateLeagueChips(fixtures);}catch(e){} setTimeout(scan,300);
-    }catch(e2){}
+    setTimeout(autoSettle,2500);
+  }catch(e){
+    fixtures=[];scanned=[];
+    renderBoard([]);
+    $('#sFixtures').textContent='0';
+    $('#status').innerHTML='No fixtures reachable right now — <span style="color:var(--accent)">tap 🌍 Capture again</span> (SofaScore may be briefly blocked on your network; ESPN is the fallback). Nothing is ever faked here: no demo data.';
+    toast('No live fixtures reachable — retry in a minute', false);
   }finally{
-    clearTimeout(failSafe); clearTimeout(hardFail);
     try{ const b=document.getElementById('btnFetch'); if(b){ b.disabled=false; b.textContent='🌍 Capture Fixtures'; } }catch(e){}
   }
 }
-// Manual entry — no API needed (now enriches via backend so board never crashes)
-async function addManual(andScan=false){
-  const home=$('#mHome').value.trim(), away=$('#mAway').value.trim();
-  const league=$('#mLeague').value, kickoff=$('#mKickoff').value || new Date().toISOString();
-  let hxg=parseFloat($('#mHxg').value), axg=parseFloat($('#mAxg').value);
-  let boH=parseFloat($('#mBoH').value), boO=parseFloat($('#mBoO').value);
-  if(!home || !away){ toast('Enter Home and Away teams', false); return; }
-  if(home.toLowerCase()===away.toLowerCase()){ toast('Teams must differ', false); return; }
-  const wHome = window.__realTeams?.[home] || window.__realTeams?.[Object.keys(window.__realTeams||{}).find(k=>k.toLowerCase().includes(home.toLowerCase()))];
-  const wAway = window.__realTeams?.[away] || window.__realTeams?.[Object.keys(window.__realTeams||{}).find(k=>k.toLowerCase().includes(away.toLowerCase()))];
-  if(isNaN(hxg)){
-    if(wHome && wAway) hxg = +(wHome.attack * wAway.defense * (0.95+Math.random()*0.2)).toFixed(2);
-    else hxg = +(1.55 + Math.random()*0.5).toFixed(2);
-  }
-  if(isNaN(axg)){
-    if(wHome && wAway) axg = +(wAway.attack * wHome.defense * (0.95+Math.random()*0.2)).toFixed(2);
-    else axg = +(1.25 + Math.random()*0.5).toFixed(2);
-  }
-  const kick=kickoff.includes('T')? new Date(kickoff).toISOString() : kickoff;
-  // Try to get enriched fixture from backend (instant Poisson + bookie)
-  let enriched=null;
-  try{
-    const resp = await j('/api/real_fixtures', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({home_team:home, away_team:away, league, home_xg:hxg, away_xg:axg, kickoff:kick, bookie_home: isNaN(boH)? undefined: boH, bookie_over25: isNaN(boO)? undefined: boO})}, 8000);
-    enriched = resp.fixture || resp;
-  }catch(e){ console.warn('manual POST failed, using local fallback', e.message); }
-  let manual;
-  if(enriched && enriched.true_home){
-    manual = enriched;
-    manual.kickoff = kick;
-  } else {
-    // local fallback — compute minimal probs client-side via scan later, but create displayable object now
-    const fid=Math.random().toString(36).slice(2,8).toUpperCase();
-    // crude true odds fallback so renderBoard never crashes
-    const th = 2.1, to2=1.75, tb=1.70;
-    manual={id:fid, league, home_team:home, away_team:away, home_xg:hxg, away_xg:axg, kickoff:kick, source:'manual', probs:{over25:0.55, under25:0.45, home_win:0.45, draw:0.26, away_win:0.29, btts_yes:0.55, btts_no:0.45}, true_home: isNaN(boH)? th: th, true_over25: to2, true_btts_yes: tb, bookie_home: isNaN(boH)? (th*1.08): boH, bookie_over25: isNaN(boO)? (to2*1.08): boO, bookie_btts_yes: tb*1.08, edge_home:8, edge_over:8, edge_btts:8, has_value_home:true, has_value_over:true, has_value_btts_yes:true, conf_home:{label:'MED',score:55,color:'#FFAB00'}};
-  }
-  if(!fixtures) fixtures=[];
-  fixtures.push(manual);
-  $('#sFixtures').textContent=fixtures.length;
-  $('#sFixturesSub').textContent='manual + live';
-  $('#sTime').textContent=new Date().toLocaleTimeString();
-  $('#sTimeSub').textContent=`manual • ${fixtures.length} fixtures`;
-  $('#status').textContent=`Added ${home} vs ${away} [${league}] xG ${hxg}-${axg} — ${fixtures.length} total. Hit Scan.`;
-  toast(`Added ${home} vs ${away}`, true);
-  try{ renderBoard(fixtures); }catch(e){ console.error(e); toast('Render error: '+e.message, false); }
-  if(andScan) setTimeout(scan,300);
-  $('#mHome').value=''; $('#mAway').value=''; $('#mHxg').value=''; $('#mAxg').value=''; $('#mBoH').value=''; $('#mBoO').value='';
-}
-function clearManualFixtures(){
-  if(!fixtures.length){ toast('No fixtures to clear', false); return; }
-  fixtures=[];
-  scanned=[];
-  renderBoard([]);
-  document.getElementById('scanResults').innerHTML='<div class="empty" style="grid-column:1/-1">No scan yet — add manual or capture live</div>';
-  $('#sFixtures').textContent='0'; $('#sFixturesSub').textContent='cleared'; $('#sEdges').textContent='0'; $('#sBest').textContent='—'; $('#sBestSub').textContent='—';
-  toast('Cleared all fixtures. Add manual or capture live.', true);
-}
-// load real team weights for auto xG
-fetch('/api/real_teams').then(r=>r.json()).then(j=>{window.__realTeams=j;}).catch(()=>{});
 
 async function scan(){
   if(!fixtures.length){ toast('Capture fixtures first',false); return; }
   const btn=$('#btnScan'); btn.disabled=true; btn.textContent='⏳ Scanning…';
   try{
-    let d=null;
-    try{
-      d=await j('/api/jap/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixtures})});
-    }catch(e){
-      console.warn('server scan failed, falling back to offline', e.message);
-      // offline fallback
-      const offlineScanned = fixtures.map(f=>{
-        const hx=Number(f.home_xg||1.65), ax=Number(f.away_xg||1.4);
-        const th=Number(f.true_home||0), to2=Number(f.true_over25||0), tb=Number(f.true_btts_yes||0);
-        const bh=Number(f.bookie_home||th||2.0), bo=Number(f.bookie_over25||to2||1.9), by=Number(f.bookie_btts_yes||tb||1.8);
-        const eh=bh>th? +(((bh-th)/th*100).toFixed(1)):0, eo=bo>to2? +(((bo-to2)/to2*100).toFixed(1)):0, ey=by>tb? +(((by-tb)/tb*100).toFixed(1)):0;
-        let best=null;
-        const probs=f.probs||{};
-        const conf=(e,p,x)=>{ const b=Math.min(e*4,40), ps=Math.abs((p||0.5)-0.5)*60, xb=Math.min(Math.abs((x||2.5)-2.5)*8,20); const s=Math.min(98,b+ps+xb+10); const label=e<5?'LOW':e<12?'MED':e<20?'HIGH':'MAX'; return {score:Math.round(s),label}; };
-        if(eh>5 && eh>=eo && eh>=ey) best={market:'1X2',pick:f.home_team+' HOME',odds:bh,edge:eh,conf:conf(eh, probs.home_win, hx+ax)};
-        else if(eo>5 && eo>=ey) best={market:'OU25',pick:'OVER 2.5',odds:bo,edge:eo,conf:conf(eo, probs.over25, hx+ax)};
-        else if(ey>5) best={market:'BTTS',pick:'BTTS YES',odds:by,edge:ey,conf:conf(ey, probs.btts_yes, hx+ax)};
-        return {id:f.id,league:f.league,home_team:f.home_team,away_team:f.away_team,home_xg:hx,away_xg:ax,probs:probs,true_home:th,true_over25:to2,true_btts_yes:tb,bookie_home:bh,bookie_over25:bo,bookie_btts_yes:by,edge_home:eh,edge_over:eo,edge_btts_yes:ey,best:best,kickoff:f.kickoff};
-      });
-      offlineScanned.sort((a,b)=>(b.best?.edge||0)-(a.best?.edge||0));
-      d={scanned: offlineScanned};
-    }
-    scanned=d.scanned;
+    const conf=(e,p,x)=>{ const b=Math.min(e*4,40), ps=Math.abs((p||0.5)-0.5)*60, xb=Math.min(Math.abs((x||2.5)-2.5)*8,20); const sc=Math.min(98,b+ps+xb+10); const label=e<5?'LOW':e<12?'MED':e<20?'HIGH':'MAX'; return {score:Math.round(sc),label}; };
+    const wlMap2={};predLog().forEach(e=>{wlMap2[String(e.id)]=e;});
+    scanned=fixtures.map(f=>{
+      const hx=Number(f.home_xg||1.35), ax=Number(f.away_xg||1.15);
+      const probs=f.probs||{};
+      const th=Number(f.true_home||0),to2=Number(f.true_over25||0),tb=Number(f.true_btts_yes||0);
+      const bh=(f.bookie_home!=null)?Number(f.bookie_home):null;
+      const eh=(bh!=null&&bh>th)?+(((bh-th)/th*100).toFixed(1)):0;
+      /* +EV is claimed ONLY where a real book price beats the FORM model */
+      let best=null;
+      if(f.basis==='FORM'&&eh>5) best={market:'1X2',pick:f.home_team+' HOME',odds:bh,edge:eh,conf:conf(eh,probs.home_win,hx+ax)};
+      return {id:f.id,league:f.league,home_team:f.home_team,away_team:f.away_team,
+        pred:f.pred,wl:wlMap2[String(f.id)]&&wlMap2[String(f.id)].wl,
+        home_xg:hx,away_xg:ax,probs:probs,basis:f.basis,n_books:f.n_books,source:f.source,
+        true_home:th,true_over25:to2,true_btts_yes:tb,bookie_home:bh,
+        bookie_over25:null,bookie_btts_yes:null,best:best};
+    }).sort((a,b)=>((b.best?b.best.edge:0)-(a.best?a.best.edge:0)));
     const edges=scanned.filter(s=>s.best).length;
+    const best=scanned[0]&&scanned[0].best;
     $('#sEdges').textContent=edges;
-    $('#sEdgesSub').textContent=`${scanned.filter(s=>s.edge_home>0).length} home • ${scanned.filter(s=>s.edge_over>0).length} over`;
-    const best=scanned[0]?.best;
     $('#sBest').textContent=best? `+${best.edge}%`:'—';
-    $('#sBestSub').textContent=best? `${best.market} • ${best.pick}`:'no edge >5%';
+    $('#sBestSub').textContent=best? `${best.market} • ${best.pick}`:'no real-price edge >5%';
     $('#scanCount').textContent=`${scanned.length} fixtures • ${edges} with +EV`;
     try{ const bestEdge=scanned[0]?.best?.edge||0; const sc=document.getElementById('scanCount'); if(sc && bestEdge) sc.innerHTML=`${scanned.length} fixtures • <span style="color:var(--accent)">⚡ ${edges} +EV</span> • <span style="color:var(--warn)">Top +${bestEdge}%</span>`; }catch(e){}
-
     renderScan(scanned);
-    toast(`Scanned ${scanned.length} • ${edges} with +EV`,true);
+    toast(`Scanned ${scanned.length} • ${edges} with real +EV`,true);
   }catch(e){ toast('Scan failed: '+e.message,false); console.error(e); }
   btn.disabled=false; btn.textContent='🔍 Scan +EV';
 }
+
 function renderBoard(list){
   if(!list.length){ $('#board').innerHTML='<div class="empty" style="grid-column:1/-1">No fixtures — capture or add manual below</div>'; return; }
-  $('#board').innerHTML=list.map(f=>{
+  const wlMap={}; predLog().forEach(e=>{wlMap[String(e.id)]=e;});
+  const gw=Object.keys(wlMap).filter(k=>wlMap[k].wl==='W').length;
+  const gl=Object.keys(wlMap).filter(k=>wlMap[k].wl==='L').length;
+  const gp=Object.keys(wlMap).filter(k=>!wlMap[k].wl).length;
+  const rec=(gw+gl+gp)?('<div class="tiny" style="grid-column:1/-1;margin:0 0 8px;color:var(--muted);font-family:JetBrains Mono,monospace">🔮 PREDICTIONS: <b style="color:#00E676">'+gw+'W</b> · <b style="color:#FF5C7A">'+gl+'L</b>'+((gw+gl)?(' · '+Math.round(gw/(gw+gl)*100)+'% hit'):'')+' · '+gp+' pending — auto-graded when matches finish</div>'):'';
+  $('#board').innerHTML=rec+list.map(f=>{
     try{
     const hx = Number(f.home_xg||1.5), ax = Number(f.away_xg||1.3);
     const th = Number(f.true_home||f.true_home_odds||0), to2 = Number(f.true_over25||0), tb = Number(f.true_btts_yes||0);
-    const bh = Number(f.bookie_home||f.bookie_home_odds||th||2.0), bo = Number(f.bookie_over25||f.bookie_over25_odds||to2||1.9), by = Number(f.bookie_btts_yes||tb||1.9);
-    const eh = Number(f.edge_home||0), eo = Number(f.edge_over||0), eb = Number(f.edge_btts||0);
-    const hasH = f.has_value_home || bh>th, hasO = f.has_value_over || bo>to2, hasB = f.has_value_btts_yes || by>tb;
+    const bh = (f.bookie_home!=null)?Number(f.bookie_home):null;
+    const eh = Number(f.edge_home||0), eo = 0, eb = 0;
+    const hasH = f.has_value_home===true, hasO = false, hasB = false;
     const probs = f.probs || {};
     const leagueClass = (f.league||'').replace(/\s+/g,'').replace('Ligue1','Ligue1');
     const hasAny = hasH||hasO||hasB;
     const topEdge = Math.max(eh,eo,eb);
     const flag = hasAny ? `<div class="instant-flag">⚡ +${topEdge}% INSTANT +EV</div>` : '';
+    const pe=wlMap[String(f.id)];
+    const predChip=(f.pred?('<div class="tiny" style="margin:2px 0;font-family:JetBrains Mono,monospace">🔮 '+f.pred.label+' '+Math.round((f.pred.prob||0)*100)+'%'+(f.pred.basis!=='FORM'?' <span style="opacity:.6">(mkt)</span>':'')+(pe&&pe.wl==='W'?' <b style="color:#00E676">✅ W</b>':(pe&&pe.wl==='L'?' <b style="color:#FF5C7A">❌ L</b>':''))+'</div>'):('<div class="tiny" style="margin:2px 0;font-family:JetBrains Mono,monospace;opacity:.55">&#128302; no prediction yet — no book price or form data</div>'));
     return `
     <div class="card ${hasAny?'edge':''}" style="${hasAny? 'border-color:rgba(0,230,118,0.35)':''}">
       ${flag}
+      ${predChip}
       <div class="card-head"><span><span class="badge-league ${leagueClass}">${f.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700;color:var(--text)">${f.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${hx.toFixed(2)} - ${ax.toFixed(2)} <span style="color:var(--muted)">xG</span></span></div>
       <div class="card-body">
         <div class="teams"><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.home_team||'Home'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div><div class="vs" style="font-family:Bebas Neue,sans-serif;font-size:12px;background:var(--warn);color:#000;border:none">VS</div><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.away_team||'Away'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div></div>
         <div style="display:flex;gap:6px;font-family:JetBrains Mono,monospace;font-size:10px;justify-content:center"><span style="color:var(--blue);font-weight:700">True H ${th?th.toFixed(2):'—'}</span><span style="color:var(--muted)">•</span><span style="color:var(--accent);font-weight:700">O ${to2?to2.toFixed(2):'—'}</span><span style="color:var(--muted)">•</span><span style="color:var(--pink);font-weight:700">BTTS ${tb?tb.toFixed(2):'—'}</span></div>
         <div class="odds">
-          <div class="${hasH?'edge':''}"><label>HOME</label><strong>${bh.toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">true ${th?th.toFixed(2):'—'}</div></div>
-          <div class="${hasO?'edge':''}"><label>OVER 2.5</label><strong>${bo.toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">true ${to2?to2.toFixed(2):'—'}</div></div>
+          <div class="${hasH?'edge':''}"><label>HOME ${bh!=null?('@'+bh.toFixed(2)):'(unpriced)'}</label><strong>${bh!=null?bh.toFixed(2):'—'}</strong><div style="font-size:10px;color:var(--muted)">true ${th?th.toFixed(2):'—'} · ${f.basis==='FORM'?'🟢 FORM':'⚪ MKT'}${f.n_books?(' · '+f.n_books+' books'):''}</div></div>
+          <div><label>AWAY</label><strong>${(f.bookie_away!=null)?Number(f.bookie_away).toFixed(2):'—'}</strong><div style="font-size:10px;color:var(--muted)">true ${Number(f.true_away||0)?Number(f.true_away).toFixed(2):'—'}</div></div>
         </div>
         <div class="odds">
-          <div class="${hasB?'edge':''}"><label>BTTS YES</label><strong>${by.toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">true ${tb?tb.toFixed(2):'—'}</div></div>
-          <div><label>TOTAL xG</label><strong>${(hx+ax).toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">${(probs.over25||0)>0.6?'OVER lean':(probs.under25||0)>0.6?'UNDER lean':'Balanced'}</div></div>
+          <div><label>DRAW</label><strong>${(f.bookie_draw!=null)?Number(f.bookie_draw).toFixed(2):'—'}</strong><div style="font-size:10px;color:var(--muted)">true ${Number(f.true_draw||0)?Number(f.true_draw).toFixed(2):'—'}</div></div>
+          <div><label>TOTAL xG</label><strong>${(hx+ax).toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">${(probs.over25||0)>0.6?'OVER lean':(probs.under25||0)>0.6?'UNDER lean':'Balanced'} · ${esc15(f.source||'')}</div></div>
         </div>
-        <div class="meta"><span>H +${eh}%</span><span>O +${eo}%</span><span>BTTS +${eb}%</span></div>
+        <div class="meta"><span style="${eh>0?'':'opacity:.4'}">H ${eh>0?('+'+eh+'%'):'—'}</span><span style="opacity:.4">O —</span><span style="opacity:.4">BTTS —</span></div>
       </div>
     </div>
   `;
@@ -703,6 +1036,7 @@ function renderScan(list){
     <div class="card ${b?'edge':''} ${isTop3?'market-top':''}">
       ${isTop3? `<div class="rank-badge">#${rank+1}</div>`:''}
       ${b? `<div class="instant-flag" style="background:linear-gradient(135deg,#00E676,#00E5FF);">🔥 +${b.edge}% BEST +EV</div>`:''}
+      ${s.pred?`<div class="tiny" style="font-family:JetBrains Mono,monospace;margin:2px 0">🔮 ${s.pred.label} ${Math.round((s.pred.prob||0)*100)}%${s.pred.basis!=='FORM'?' (mkt)':''}${s.wl==='W'?' <b style="color:#00E676">✅ W</b>':(s.wl==='L'?' <b style="color:#FF5C7A">❌ L</b>':'')}</div>`:''}
       <div class="card-head"><span><span class="badge-league ${(s.league||'').replace(/\s+/g,'')}">${s.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700">${s.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${hx.toFixed(2)}-${ax.toFixed(2)} <span style="color:var(--muted)">xG</span></span></div>
       <div class="card-body">
         <div class="teams"><div class="team"><b>${s.home_team||'Home'}</b></div><div class="vs">VS</div><div class="team"><b>${s.away_team||'Away'}</b></div></div>
@@ -729,13 +1063,13 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v14';
+let BUILD_VERSION = 'v18.2';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
     const meta=JSON.parse(metaEl.textContent||'{}');
     SERVER_DATE=meta.server_date||'';
-    BUILD_VERSION=meta.build_version||'v14';
+    BUILD_VERSION=meta.build_version||BUILD_VERSION;
   } else {
     const m=document.querySelector('meta[name="server-date"]');
     if(m) SERVER_DATE=m.content||'';
@@ -806,29 +1140,15 @@ window.addEventListener('load', ()=>{
         }
       }catch(e){
         console.warn('auto capture failed',e);
-        if(st) st.textContent='⚠️ Live pull failed — showing demo fixtures. Tap 🌍 Capture to retry or add manual.';
-        // fallback demo so board never empty
-        try{
-          fixtures = [
-            {"id":"DEMO01","league":"EPL","home_team":"Arsenal","away_team":"Chelsea","home_xg":1.85,"away_xg":1.4,"true_home":2.1,"true_over25":1.7,"true_btts_yes":1.6,"bookie_home":2.45,"bookie_over25":2.05,"bookie_btts_yes":1.85,"edge_home":16,"edge_over":20,"edge_btts":15,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.58,"under25":0.42,"home_win":0.47,"draw":0.25,"away_win":0.28,"btts_yes":0.62}},
-            {"id":"DEMO02","league":"LaLiga","home_team":"Real Madrid","away_team":"Barcelona","home_xg":2.1,"away_xg":1.9,"true_home":2.4,"true_over25":1.45,"true_btts_yes":1.45,"bookie_home":2.85,"bookie_over25":1.95,"bookie_btts_yes":1.75,"edge_home":18,"edge_over":34,"edge_btts":20,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.69,"under25":0.31,"home_win":0.41,"draw":0.24,"away_win":0.35,"btts_yes":0.69}},
-            {"id":"DEMO03","league":"Serie A","home_team":"Inter","away_team":"Juventus","home_xg":1.9,"away_xg":1.5,"true_home":2.0,"true_over25":1.6,"true_btts_yes":1.55,"bookie_home":2.3,"bookie_over25":1.88,"bookie_btts_yes":1.9,"edge_home":15,"edge_over":17,"edge_btts":22,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.62,"under25":0.38,"home_win":0.48,"draw":0.23,"away_win":0.29,"btts_yes":0.64}},
-            {"id":"DEMO04","league":"Bundesliga","home_team":"Bayern Munich","away_team":"Dortmund","home_xg":2.2,"away_xg":1.6,"true_home":1.85,"true_over25":1.4,"true_btts_yes":1.42,"bookie_home":1.95,"bookie_over25":1.75,"bookie_btts_yes":1.65,"edge_home":5.4,"edge_over":25,"edge_btts":16,"has_value_home":true,"has_value_over":true,"has_value_btts_yes":true,"probs":{"over25":0.71,"under25":0.29,"home_win":0.54,"draw":0.22,"away_win":0.24,"btts_yes":0.70}}
-          ];
-          renderBoard(fixtures);
-          try{ renderXGTable(fixtures); }catch(e){}
-          try{ updateLeagueChips(fixtures); }catch(e){}
-          setTimeout(scan,400);
-          document.getElementById('sFixtures').textContent=fixtures.length;
-          document.getElementById('sFixturesSub').textContent='demo fallback • auto';
-        }catch(e2){ console.warn(e2); }
+        const st2=document.getElementById('status');
+        if(st2) st2.textContent='⚠️ Live pull failed — nothing is ever faked here. Tap 🌍 Capture to retry or add a fixture manually below.';
+        renderBoard([]);
+        try{ document.getElementById('sFixtures').textContent='0'; }catch(e2){}
       }
-    } else {
-      // already have fixtures, ensure status shows
-      const st=document.getElementById('status');
-      if(st && fixtures.length) st.textContent='✅ Auto-loaded '+fixtures.length+' fixtures — ready to scan (instant +EV flagged)';
     }
   }, 600);
+  setTimeout(()=>{try{autoSettle();}catch(e){}},5000);
+
 });
 
 
@@ -836,6 +1156,7 @@ window.addEventListener('load', ()=>{
 (function(){
   // every 5 min: if date rolled over, pull fresh fixtures
   setInterval(()=>{
+    try{ autoSettle(); }catch(e){}
     const todayStr=new Date().toISOString().slice(0,10);
     if(SERVER_DATE && todayStr!==SERVER_DATE){
       console.log('date rolled over',SERVER_DATE,'->',todayStr,'auto-refreshing');
@@ -1309,7 +1630,7 @@ setTimeout(()=>{
 }, 500);
 
 
-setTimeout(()=>{ try{ renderTracker(); renderLeaderboard(); }catch(e){ console.warn(e);} try{ document.getElementById('footerVersion').textContent=BUILD_VERSION; document.getElementById('footerDate').textContent=SERVER_DATE+' • auto-updates daily'; }catch(e){} }, 600);
+setTimeout(()=>{ try{ renderTracker(); renderLeaderboard(); }catch(e){ console.warn(e);} try{ document.getElementById('footerVersion').textContent=BUILD_VERSION; document.getElementById('footerDate').textContent=(SERVER_DATE?SERVER_DATE+' • ':'')+'auto-updates daily'; var bv=document.getElementById('brandVer'); if(bv) bv.textContent=BUILD_VERSION; }catch(e){} }, 600);
 
 </script>
 </body>
