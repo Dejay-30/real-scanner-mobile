@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v19.0">
+<meta name="build-version" content="v19.1">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -165,7 +165,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v19.0</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v19.1</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" id="btnMenu" onclick="toggleMenu()" aria-haspopup="menu" style="padding:7px 14px;font-weight:800;letter-spacing:.04em">☰ Menu</button>
@@ -441,10 +441,10 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v19.0"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v19.1"}</script>
 <script>
 const $=s=>document.querySelector(s);
-let fixtures=[], scanned=[], autoTimer=null, rs15SweepBusy=false, RS15BOARDMANUAL=false;
+let fixtures=[], scanned=[], autoTimer=null, rs15SweepBusy=false, RS15BOARDMANUAL=false, rs15CapSeq=0, rs15PendingCont=null;
 // --- server-preloaded fixtures (auto-pull everything) ---
 try{
   const preEl=document.getElementById('preload');
@@ -511,6 +511,7 @@ $('#provider').addEventListener('change',()=>{
 
 /* ===== v15 DIRECT CAPTURE — every real fixture, real odds only ===== */
 const RS15={AVG:1.35,HOME:1.12,AWAY:0.93,MIN_N:5,MAX_FIX:400,CHUNK:4,PACE:300,SUM_CAP:200};
+let rs15SofaOk=true;   /* false once SofaScore proves unreachable this session */
 const RS15C={teams:{}};
 function esc15(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 /* v18.5: flaky-network resilience - every API call retries 3x with backoff,
@@ -524,9 +525,20 @@ function rs15Fetch(kind,url,tries){
   if(Date.now()<RS15NET[kind+'Until'])return Promise.reject(new TypeError('direct known dead'));
   return rs15Retry(url,tries)['catch'](e=>{if(e instanceof TypeError)RS15NET[kind+'Until']=Date.now()+60000;throw e;});
 }
-function rs15Jina(url){return fetch('https://r.jina.ai/'+url,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(j=>{const c=(((j||{}).data)||{}).content;return c?JSON.parse(c):null;});}
-function rs15SOFA(p){return rs15Fetch('sofa','https://api.sofascore.com/api/v1'+p,2)['catch'](()=>rs15Jina('https://api.sofascore.com/api/v1'+p));}
-function rs15ESPN(p){return rs15Fetch('espn','https://site.web.api.espn.com'+p,2)['catch'](()=>rs15Jina('https://site.web.api.espn.com'+p))['catch'](()=>{if(location.protocol!=='http:'&&location.protocol!=='https:')return null;return fetch('/espnw'+p,{headers:{'Accept':'application/json'}}).then(r=>r.ok?r.json():null)['catch'](()=>null);});}
+/* v19.1: no single public relay is reliable long-term (r.jina.ai started
+   demanding keys) - try several in order; each may return the raw JSON or
+   an envelope wrapping it */
+function rs15RelayRaw(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(t=>{try{return JSON.parse(t);}catch(e){throw new Error('bad json');}});}
+function rs15RelayAttempt(u){return rs15RelayRaw(u).then(j=>{if(j&&j.data&&typeof j.data.content==='string'){try{return JSON.parse(j.data.content);}catch(e){return null;}}if(j&&typeof j.contents==='string'){try{return JSON.parse(j.contents);}catch(e){return null;}}return j;});}
+function rs15Relay(url){
+  const enc=encodeURIComponent(url);
+  const relays=['https://api.allorigins.win/raw?url='+enc,'https://api.codetabs.com/v1/proxy?quest='+enc,'https://corsproxy.io/?url='+enc,'https://r.jina.ai/'+url];
+  let p=Promise.reject(new Error('relay chain start'));
+  relays.forEach(r=>{p=p['catch'](()=>rs15RelayAttempt(r));});
+  return p;
+}
+function rs15SOFA(p){return rs15Fetch('sofa','https://api.sofascore.com/api/v1'+p,2)['catch'](()=>rs15Relay('https://api.sofascore.com/api/v1'+p));}
+function rs15ESPN(p){return rs15Fetch('espn','https://site.web.api.espn.com'+p,2)['catch'](()=>rs15Relay('https://site.web.api.espn.com'+p))['catch'](()=>{if(location.protocol!=='http:'&&location.protocol!=='https:')return null;return fetch('/espnw'+p,{headers:{'Accept':'application/json'}}).then(r=>r.ok?r.json():null)['catch'](()=>null);});}
 function rs15Books(d){
   const out=[];
   function of_(o){
@@ -623,7 +635,7 @@ function rs15Mk(fx,odds,rh,ra){
     status:fx.status||'',is_past:!!fx.is_past,result:fx.result||'',
     home_score:fx.home_score,away_score:fx.away_score,
     basis:basis,n_books:odds?odds.n:0,
-    source:(odds&&odds.n>1)?('SofaScore · '+odds.n+' books'):(odds?'ESPN · DraftKings':'no odds')};
+    source:(odds&&odds.n>1)?('SofaScore · '+odds.n+' books'):(odds?(odds.label||'ESPN · DraftKings'):'no odds')};
 }
 async function rs15SofaDay(dateStr,wantPast){
   const d=await rs15SOFA('/sport/football/scheduled-events/'+dateStr);
@@ -696,7 +708,7 @@ async function rs15Enrich(list,prog){
     const rows=await Promise.all(part.map(async fx=>{
       try{
         let odds=fx.odds||null;
-        if(!odds&&fx.src!=='espn'){
+        if(!odds&&fx.src!=='espn'&&rs15SofaOk){
           /* two attempts with a beat between — the wire throttles bursts */
           for(let att=0;att<2&&!odds;att++){
             try{
@@ -837,8 +849,42 @@ function rs15CrossFill(rows,map){
     return rs15Mk(r._fx,od,r._rh,r._ra);
   });
 }
+/* v19.1: 365scores - CORS-open third source with real fixtures AND real
+   book 1X2 (Superbet etc). Works on networks that block SofaScore + ESPN. */
+async function rs15Day365(dateStr){
+  const ds=(dateStr||'').replace(/-/g,'/');
+  const d=await rs15RelayRaw('https://webws.365scores.com/web/games/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&sportId=1&gameDate='+ds+'&showOdds=true');
+  const comps={};((((d||{}).competitions)||[]).forEach(c=>{comps[c.id]=c.name||'Football';}));
+  const out=[];
+  ((((d||{}).games)||[])).forEach(g=>{
+    if(g.sportId!==1)return;
+    const hc=g.homeCompetitor||{},ac=g.awayCompetitor||{};
+    if(!hc.name||!ac.name)return;
+    const sg=g.statusGroup;
+    const fin=sg===4,live=sg===3;
+    let odds=null;
+    const opts=(((g.odds)||{}).options)||[];
+    if(opts.length>=3){
+      const m={};
+      opts.forEach(o=>{m[String(o.name)]=(((o.rate)||{}).decimal)||null;});
+      if(m['1']>1&&m['X']>1&&m['2']>1){
+        const bk=((((g.odds)||{}).bookmaker)||{}).name;
+        odds={o1:m['1'],ox:m['X'],o2:m['2'],n:1,label:'365scores'+(bk?(' · '+bk):'')};
+      }
+    }
+    const sc=(hc.score!=null&&hc.score>=0&&ac.score!=null&&ac.score>=0);
+    out.push({id:'g'+g.id,home:hc.name,away:ac.name,src:'365',
+      lg:comps[g.competitionId]||'Football',
+      ts:g.startTime?Math.floor(Date.parse(g.startTime)/1000):null,
+      status:fin?'post':(live?'in':'pre'),
+      is_past:fin&&sc,result:sc?(hc.score+'-'+ac.score):'',
+      home_score:sc?hc.score:null,away_score:sc?ac.score:null,odds:odds});
+  });
+  return out;
+}
 async function rs15Direct(dateStr,prov){
   let rs15SofaListOk=false;
+  rs15SofaOk=true;
   const today=rs15LocalDate(0);
   const wantPast=!!dateStr&&dateStr<today;
   const useDate=dateStr||today;
@@ -866,8 +912,9 @@ async function rs15Direct(dateStr,prov){
           return out;
         }
       }
-    }catch(e){console.warn('sofa direct failed',e.message);}
+    }catch(e){console.warn('sofa direct failed',e.message);rs15SofaOk=false;}
   }
+  if(!rs15SofaListOk)rs15SofaOk=false;
   /* v17.4: today's board = not-started matches only (same rule as the SofaScore
      path). Books delist 1X2 at kickoff - live/finished games are unpriced noise;
      their results still arrive via calendar + auto-settle */
@@ -915,7 +962,23 @@ async function rs15Direct(dateStr,prov){
       return out;
     }
   }
-  throw new Error('no live fixtures reachable from either source');
+  /* v19.1: 365scores third source - CORS-direct, real fixtures + real book 1X2 */
+  try{
+    const g365=await rs15Day365(useDate);
+    const g2=wantPast?g365.filter(g=>g.is_past):g365.filter(g=>g.status!=='post'&&g.status!=='in');
+    if(g2.length){
+      let fx=await rs15Enrich(g2,null);
+      if(fx.length){
+        const out={fixtures:fx,provider:'365scores',note:'every fixture · real book 1X2 · direct CORS'};
+        out.cont=async function(onChunk){
+          out.fixtures.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+          if(onChunk){ try{ onChunk(true); }catch(e){} }
+        };
+        return out;
+      }
+    }
+  }catch(e){console.warn('365 fallback failed',e.message);}
+  throw new Error('no live fixtures reachable from any source');
 }
 
 /* ===== v16 auto-prediction log + auto-settle ===== */
@@ -957,6 +1020,12 @@ async function rs15ResultsFor(dateStr){
     const evs=await rs15SofaDay(dateStr,true);
     evs.forEach(e=>{if(e.is_past&&e.home_score!=null&&e.away_score!=null)put(e.home,e.away,e.home_score,e.away_score);});
   }catch(e){}
+  if(!Object.keys(map).length){
+    try{
+      const g=await rs15Day365(dateStr);
+      g.forEach(e=>{if(e.is_past)put(e.home,e.away,e.home_score,e.away_score);});
+    }catch(e){}
+  }
   return map;
 }
 async function autoSettle(){
@@ -987,7 +1056,30 @@ async function autoSettle(){
   return graded;
 }
 
+/* v19.1: capture sequence - a stale background sweep (from an older capture)
+   must NEVER overwrite a newer capture's board */
+function rs15RunCont(res,mySeq,noLog){
+  rs15SweepBusy=true;
+  (async function(){
+    try{
+      await res.cont(function(fin){
+        if(mySeq!==rs15CapSeq)return;   /* newer capture has taken over */
+        fixtures=res.fixtures||fixtures;
+        try{ const pr=fixtures.filter(f=>f.bookie_home!=null).length;
+          $('#status').textContent=fin?('✅ '+pr+' priced · '+fixtures.length+' fixtures — real prices only'):('💵 '+pr+' / '+fixtures.length+' priced — streaming real prices…'); }catch(e){}
+        try{ if(!noLog) logPredictions(fixtures); }catch(e){}
+        try{ renderBoard(fixtures); }catch(e){}
+        try{ renderXGTable(fixtures); }catch(e){}
+        try{ updateLeagueChips(fixtures); }catch(e){}
+        setTimeout(scan,50);
+      });
+    }catch(e){}
+    rs15SweepBusy=false;
+    if(rs15PendingCont){ const pc=rs15PendingCont; rs15PendingCont=null; rs15RunCont(pc.res,pc.seq,pc.noLog); }
+  })();
+}
 async function capture(){
+  const capSeq=++rs15CapSeq;
   const provEl=$('#provider'); const prov=provEl?provEl.value:'auto';
   const btn=document.getElementById('btnFetch');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Capturing…'; }
@@ -1012,29 +1104,15 @@ async function capture(){
     setTimeout(scan,400);
     setTimeout(autoSettle,2500);
     try{ if(!RS15BOARDMANUAL) showTool('tsBoard'); }catch(e){}
-    if(typeof res.cont==='function'&&!rs15SweepBusy){
-      rs15SweepBusy=true;
-      (async function(){
-        try{
-          await res.cont(function(fin){
-            fixtures=res.fixtures||fixtures;
-            try{ const pr=fixtures.filter(f=>f.bookie_home!=null).length;
-              $('#status').textContent=fin?('✅ '+pr+' priced · '+fixtures.length+' fixtures — real prices only'):('💵 '+pr+' / '+fixtures.length+' priced — streaming real prices…'); }catch(e){}
-            try{ if(!dateVal) logPredictions(fixtures); }catch(e){}
-            try{ renderBoard(fixtures); }catch(e){}
-            try{ renderXGTable(fixtures); }catch(e){}
-            try{ updateLeagueChips(fixtures); }catch(e){}
-            setTimeout(scan,50);
-          });
-        }catch(e){}
-        rs15SweepBusy=false;
-      })();
+    if(typeof res.cont==='function'){
+      if(rs15SweepBusy){ rs15PendingCont={res:res,seq:capSeq,noLog:!!dateVal}; }
+      else rs15RunCont(res,capSeq,!!dateVal);
     }
   }catch(e){
     fixtures=[];scanned=[];
     renderBoard([]);
     $('#sFixtures').textContent='0';
-    $('#status').innerHTML='No fixtures reachable right now — <span style="color:var(--accent)">tap 🌍 Capture again</span>. Requests now retry automatically; if it still fails, switch between WiFi and mobile data (some networks block SofaScore; ESPN is the fallback). Nothing is ever faked here: no demo data.';
+    $('#status').innerHTML='No fixtures reachable right now — <span style="color:var(--accent)">tap 🌍 Capture again</span>. Requests retry automatically and three sources are tried (SofaScore → ESPN → 365scores). If it still fails, switch between WiFi and mobile data — some networks block specific sites. Nothing is ever faked here: no demo data.';
     toast('No live fixtures reachable — retry in a minute', false);
   }finally{
     try{ const b=document.getElementById('btnFetch'); if(b){ b.disabled=false; b.textContent='🌍 Capture Fixtures'; } }catch(e){}
@@ -1159,7 +1237,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v19.0';
+let BUILD_VERSION = 'v19.1';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
