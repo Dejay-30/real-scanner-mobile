@@ -15,7 +15,7 @@
 
 ## 📲 Download the Android APK (direct)
 
-**[`Real-Scanner-v18.1.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v18.1.apk)** — debug build, no signing needed to install. **v18.1 = always-current shell: the app loads the live version from the web, so this is the LAST APK you ever need to install.** Honest predictions: no fixture gets a prediction without a real book price or form data.
+**[`Real-Scanner-v18.2.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v18.2.apk)** — debug build, no signing needed to install. **v18.2 = always-current shell (loads live version - last install ever).** Off-peak coverage (pulls tomorrow's priced fixtures when today is thin); honest predictions (never manufactured); every repo file now serves the current engine.
 
 On your phone: open the link → let it download → tap the file → allow *Install unknown apps* if asked. The app runs fullscreen with its own icon, auto-pulls every fixture on open, and the engine is identical to the web version at **https://dejay-30.github.io/real-scanner-mobile/**.
 
