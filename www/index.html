@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v18.3">
+<meta name="build-version" content="v18.4">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -156,7 +156,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.3</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.4</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" style="padding:6px 10px;font-size:11px" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);" title="Clear phone cache">↻ Reset</button>
@@ -404,7 +404,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.3"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.4"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null;
@@ -914,7 +914,7 @@ async function capture(){
   const provEl=$('#provider'); const prov=provEl?provEl.value:'auto';
   const btn=document.getElementById('btnFetch');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Capturing…'; }
-  const dateVal=document.getElementById('calDate')?.value;
+  const dateVal=(document.getElementById('calDate')||{}).value;
   try{
     $('#status').textContent=`Capturing every ${dateVal?dateVal:'today'} fixture · ${prov==='espn'?'ESPN':'SofaScore → ESPN'}…`;
     const res=await rs15Direct(dateVal||null,prov);
@@ -972,7 +972,7 @@ async function scan(){
     $('#sBest').textContent=best? `+${best.edge}%`:'—';
     $('#sBestSub').textContent=best? `${best.market} • ${best.pick}`:'no real-price edge >5%';
     $('#scanCount').textContent=`${scanned.length} fixtures • ${edges} with +EV`;
-    try{ const bestEdge=scanned[0]?.best?.edge||0; const sc=document.getElementById('scanCount'); if(sc && bestEdge) sc.innerHTML=`${scanned.length} fixtures • <span style="color:var(--accent)">⚡ ${edges} +EV</span> • <span style="color:var(--warn)">Top +${bestEdge}%</span>`; }catch(e){}
+    try{ const bestEdge=((scanned[0]||{}).best||{}).edge||0; const sc=document.getElementById('scanCount'); if(sc && bestEdge) sc.innerHTML=`${scanned.length} fixtures • <span style="color:var(--accent)">⚡ ${edges} +EV</span> • <span style="color:var(--warn)">Top +${bestEdge}%</span>`; }catch(e){}
     renderScan(scanned);
     toast(`Scanned ${scanned.length} • ${edges} with real +EV`,true);
   }catch(e){ toast('Scan failed: '+e.message,false); console.error(e); }
@@ -1063,7 +1063,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v18.3';
+let BUILD_VERSION = 'v18.4';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
@@ -1250,7 +1250,7 @@ function trackOne(scanId){
     fixtureId: s.id,
     league: s.league, home_team: s.home_team, away_team: s.away_team,
     market: s.best.market, pick: s.best.pick, odds: s.best.odds, edge: s.best.edge,
-    conf: s.best.conf?.label||'', confScore: s.best.conf?.score||0,
+    conf: (s.best.conf||{}).label||'', confScore: (s.best.conf||{}).score||0,
     kickoff: s.kickoff||'', xg: (s.home_xg||0)+'+'+(s.away_xg||0),
     status:'pending', hs:'', as:'', profit:0, settledAt:'',
     createdAt: new Date().toISOString()
@@ -1271,7 +1271,7 @@ function trackAllEV(){
     t.unshift({
       tid: uid(), fixtureId: s.id, league: s.league, home_team: s.home_team, away_team: s.away_team,
       market: s.best.market, pick: s.best.pick, odds: s.best.odds, edge: s.best.edge,
-      conf: s.best.conf?.label||'', confScore: s.best.conf?.score||0,
+      conf: (s.best.conf||{}).label||'', confScore: (s.best.conf||{}).score||0,
       kickoff: s.kickoff||'', xg:(s.home_xg||0)+'+'+(s.away_xg||0),
       status:'pending', hs:'', as:'', profit:0, settledAt:'', createdAt: new Date().toISOString()
     });
@@ -1485,7 +1485,7 @@ function loadDemoResults(){
 
 // === v13: calendar, all ESPN, latest leagues, xG table, betslip ===
 function fetchByCalendar(){
-  const d=document.getElementById('calDate')?.value;
+  const d=(document.getElementById('calDate')||{}).value;
   if(!d){ toast('Pick a date first', false); return; }
   document.getElementById('calStatus').textContent='Fetching '+d+'…';
   // set provider to espn and trigger capture with date
@@ -1581,7 +1581,7 @@ function clearBetslip(){ if(!confirm('Clear betslip?')) return; localStorage.rem
 function copyBetslip(){
   const bs=loadBetslip();
   if(!bs.length){ toast('Betslip empty', false); return; }
-  const stake=Number(document.getElementById('betStake')?.value||1000);
+  const stake=Number((document.getElementById('betStake')||{}).value||1000);
   const combined=bs.reduce((a,b)=> a*b.odds, 1);
   const ret=(stake*combined).toFixed(2);
   const txt=`BETSLIP (${bs.length} picks) — Stake ₦${stake} • Combined @${combined.toFixed(2)} • Returns ₦${ret}
@@ -1617,7 +1617,7 @@ function updateBetslipUI(){
   const combined=bs.reduce((a,b)=> a*b.odds, 1);
   if(combEl) combEl.textContent='@'+combined.toFixed(2);
   if(oddsEl) oddsEl.textContent='@'+combined.toFixed(2);
-  const stake=Number(document.getElementById('betStake')?.value||1000);
+  const stake=Number((document.getElementById('betStake')||{}).value||1000);
   if(retEl) retEl.textContent='₦'+(stake*combined).toLocaleString(undefined,{maximumFractionDigits:0});
 }
 // stake change listener
