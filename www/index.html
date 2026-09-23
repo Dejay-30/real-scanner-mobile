@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v18.8">
+<meta name="build-version" content="v18.9">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -151,19 +151,30 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 .league-chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 .league-chip{padding:6px 10px;border-radius:99px;border:1px solid var(--border);background:var(--card2);font-family:Bebas Neue,Outfit,sans-serif;font-size:11px;cursor:pointer;letter-spacing:0.04em}
 .league-chip.active{background:var(--accent);color:#04120A;border-color:var(--accent)}
+.menu-panel{display:none;position:fixed;top:64px;right:10px;z-index:1200;min-width:250px;background:var(--card2);border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 44px rgba(0,0,0,.55);overflow:hidden}
+.menu-panel.open{display:block}
+.menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:Outfit,sans-serif;font-size:14px;font-weight:600;cursor:pointer;text-align:left;text-decoration:none;line-height:1.25}
+.menu-item:last-child{border-bottom:none}
+.menu-item:hover{background:rgba(255,255,255,.05)}
+.menu-item .mi-sub{display:block;font-size:11px;font-weight:400;color:var(--muted)}
+.menu-badge{margin-left:auto;background:linear-gradient(135deg,#00E676,#2D7DFF);color:#04120A;border-radius:99px;padding:2px 8px;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800}
 
 </style>
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.8</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.9</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
-    <a id="btnBackJap" href="https://dejay-30.github.io/james-ai-predictor/" title="Back to James AI Predictor" style="text-decoration:none;display:inline-block;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--muted);font-family:Bebas Neue,Outfit,sans-serif;font-size:12px;letter-spacing:.06em">🔙 JAMES AI</a>
-    <button class="btn" style="padding:6px 10px;font-size:11px" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);" title="Clear phone cache">↻ Reset</button>
-    <button class="btn" id="betslipBtn" style="padding:7px 12px;background:linear-gradient(135deg,#00E676,#2D7DFF);color:#04120A;border:none;font-weight:800" onclick="toggleBetslip()">🎫 Betslip <span id="betslipCount" style="background:#04120A;color:var(--accent);padding:2px 6px;border-radius:99px;font-family:JetBrains Mono,monospace;font-size:10px">0</span></button>
-    <button class="btn" style="padding:7px 10px" onclick="openSettings()">⚙️ API</button>
+    <button class="btn" id="btnMenu" onclick="toggleMenu()" aria-haspopup="menu" style="padding:7px 14px;font-weight:800;letter-spacing:.04em">☰ Menu</button>
   </div>
+</div>
+<div class="menu-panel" id="menuPanel">
+  <a class="menu-item" id="btnBackJap" href="https://dejay-30.github.io/james-ai-predictor/" title="Back to James AI Predictor">🔙 Return<span class="mi-sub">back to James AI Predictor</span></a>
+  <button class="menu-item" id="betslipBtn" onclick="toggleBetslip();closeMenu();">🎫 Betslip<span class="menu-badge" id="betslipCount">0</span></button>
+  <button class="menu-item" onclick="openSettings();closeMenu();">⚙️ API Settings<span class="mi-sub">keys &amp; data sources</span></button>
+  <button class="menu-item" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);">↻ Reset Cache<span class="mi-sub">fixes a stuck old version</span></button>
+  <button class="menu-item" id="miClear" onclick="clearBoard()">🧹 Clear Board<span class="mi-sub">empty the fixtures column</span></button>
 </div>
 </div>
 
@@ -405,7 +416,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.8"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.9"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null;
@@ -1077,7 +1088,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v18.8';
+let BUILD_VERSION = 'v18.9';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
@@ -1653,6 +1664,21 @@ if(p.indexOf('/james-ai-predictor')===0)href='../';
 else if(/^\/real-scanner(\.html)?\/?$/.test(p))href='/';
 else if(location.protocol==='http:'&&/^(localhost|127\.)/.test(location.hostname))href='/';
 b.setAttribute('href',href);})();
+/* v18.9: header menu - every topbar action collapses into one place */
+function toggleMenu(){var m=document.getElementById('menuPanel');if(!m)return;if(m.classList.contains('open')){m.classList.remove('open');}else{m.classList.add('open');}}
+function closeMenu(){var m=document.getElementById('menuPanel');if(m)m.classList.remove('open');}
+function clearBoard(){
+  closeMenu();
+  if(!fixtures.length){toast('Board is already empty',false);return;}
+  if(!confirm('Clear all captured fixtures from the board?'))return;
+  fixtures=[];scanned=[];
+  try{if(autoTimer){clearInterval(autoTimer);autoTimer=null;var ab=document.getElementById('btnAuto');if(ab)ab.textContent='⏱ Auto 30s';}}catch(e){}
+  try{renderBoard([]);}catch(e){}
+  try{var st=document.getElementById('status');if(st)st.textContent='Board cleared — tap 🌍 Capture to reload today\'s fixtures.';}catch(e){}
+  toast('Fixtures cleared',true);
+}
+document.addEventListener('click',function(e){var m=document.getElementById('menuPanel');if(!m||!m.classList.contains('open'))return;var b=document.getElementById('btnMenu');try{if(m.contains(e.target)||(b&&b.contains(e.target)))return;}catch(err){}closeMenu();},false);
+document.addEventListener('keydown',function(e){if((e.key==='Escape')||(e.keyCode===27))closeMenu();});
 setTimeout(()=>{ try{ renderTracker(); renderLeaderboard(); }catch(e){ console.warn(e);} try{ document.getElementById('footerVersion').textContent=BUILD_VERSION; document.getElementById('footerDate').textContent=(SERVER_DATE?SERVER_DATE+' • ':'')+'auto-updates daily'; var bv=document.getElementById('brandVer'); if(bv) bv.textContent=BUILD_VERSION; }catch(e){} }, 600);
 
 </script>
