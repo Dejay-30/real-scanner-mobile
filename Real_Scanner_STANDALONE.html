@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v18.2">
+<meta name="build-version" content="v18.3">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -156,7 +156,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.2</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.3</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" style="padding:6px 10px;font-size:11px" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);" title="Clear phone cache">↻ Reset</button>
@@ -404,7 +404,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.2"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.3"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null;
@@ -536,7 +536,7 @@ function rs15Mk(fx,odds,rh,ra){
   let basis='MKT',lam=null;
   if(rh&&ra){basis='FORM';lam={lh:RS15.AVG*RS15.HOME*rh.atk*ra.def,la:RS15.AVG*RS15.AWAY*ra.atk*rh.def};}
   else if(odds){const dv=rs15Devig(odds.o1,odds.ox,odds.o2);lam=rs15Fit(dv.h,dv.d,dv.a);}
-  else {basis='MKT';lam={lh:1.35,la:1.15};}
+  else {basis='MKT';lam={lh:1.35,la:1.15};}   /* v18.3: flagged - identical defaults never displayed */
   const p=rs15Grid(lam.lh,lam.la);
   const r2=x=>Math.round(x*100)/100;
   const th=r2(1/p.home_win),td=r2(1/p.draw),ta=r2(1/p.away_win);
@@ -554,9 +554,9 @@ function rs15Mk(fx,odds,rh,ra){
   return {id:String(fx.id),league:fx.league||'Football',home_team:fx.home,away_team:fx.away,
     pred:pk?{pick:pk,label:pl,prob:p[pk],basis:basis}:null,
     kickoff:fx.ts?new Date(fx.ts*1000).toISOString():new Date().toISOString(),
-    home_xg:+lam.lh.toFixed(2),away_xg:+lam.la.toFixed(2),probs:p,
-    true_home:th,true_draw:td,true_away:ta,
-    true_over25:r2(1/p.over25),true_under25:r2(1/p.under25),true_btts_yes:r2(1/p.btts_yes),true_btts_no:r2(1/p.btts_no),
+    home_xg:(odds||(rh&&ra))?+lam.lh.toFixed(2):null,away_xg:(odds||(rh&&ra))?+lam.la.toFixed(2):null,probs:(odds||(rh&&ra))?p:null,no_model:!(odds||(rh&&ra)),
+    true_home:(odds||(rh&&ra))?th:null,true_draw:(odds||(rh&&ra))?td:null,true_away:(odds||(rh&&ra))?ta:null,
+    true_over25:(odds||(rh&&ra))?r2(1/p.over25):null,true_under25:(odds||(rh&&ra))?r2(1/p.under25):null,true_btts_yes:(odds||(rh&&ra))?r2(1/p.btts_yes):null,true_btts_no:(odds||(rh&&ra))?r2(1/p.btts_no):null,
     bookie_home:bh,bookie_draw:bd,bookie_away:ba,
     bookie_over25:null,bookie_under25:null,bookie_btts_yes:null,bookie_btts_no:null,
     edge_home:eh,edge_over:0,edge_btts:0,
@@ -1014,7 +1014,7 @@ function renderBoard(list){
         </div>
         <div class="odds">
           <div><label>DRAW</label><strong>${(f.bookie_draw!=null)?Number(f.bookie_draw).toFixed(2):'—'}</strong><div style="font-size:10px;color:var(--muted)">true ${Number(f.true_draw||0)?Number(f.true_draw).toFixed(2):'—'}</div></div>
-          <div><label>TOTAL xG</label><strong>${(hx+ax).toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">${(probs.over25||0)>0.6?'OVER lean':(probs.under25||0)>0.6?'UNDER lean':'Balanced'} · ${esc15(f.source||'')}</div></div>
+          <div><label>TOTAL xG</label><strong>${f.no_model?'—':(hx+ax).toFixed(2)}</strong><div style="font-size:10px;color:var(--muted)">${f.no_model?'no model data (unpriced)':((probs.over25||0)>0.6?'OVER lean':(probs.under25||0)>0.6?'UNDER lean':'Balanced')} · ${esc15(f.source||'')}</div></div>
         </div>
         <div class="meta"><span style="${eh>0?'':'opacity:.4'}">H ${eh>0?('+'+eh+'%'):'—'}</span><span style="opacity:.4">O —</span><span style="opacity:.4">BTTS —</span></div>
       </div>
@@ -1037,13 +1037,13 @@ function renderScan(list){
       ${isTop3? `<div class="rank-badge">#${rank+1}</div>`:''}
       ${b? `<div class="instant-flag" style="background:linear-gradient(135deg,#00E676,#00E5FF);">🔥 +${b.edge}% BEST +EV</div>`:''}
       ${s.pred?`<div class="tiny" style="font-family:JetBrains Mono,monospace;margin:2px 0">🔮 ${s.pred.label} ${Math.round((s.pred.prob||0)*100)}%${s.pred.basis!=='FORM'?' (mkt)':''}${s.wl==='W'?' <b style="color:#00E676">✅ W</b>':(s.wl==='L'?' <b style="color:#FF5C7A">❌ L</b>':'')}</div>`:''}
-      <div class="card-head"><span><span class="badge-league ${(s.league||'').replace(/\s+/g,'')}">${s.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700">${s.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${hx.toFixed(2)}-${ax.toFixed(2)} <span style="color:var(--muted)">xG</span></span></div>
+      <div class="card-head"><span><span class="badge-league ${(s.league||'').replace(/\s+/g,'')}">${s.league||'—'}</span> • <span style="font-family:Outfit,sans-serif;font-weight:700">${s.id||''}</span></span><span style="font-family:JetBrains Mono,monospace;color:var(--cyan)">${s.no_model?'— xG':(hx.toFixed(2)+'-'+ax.toFixed(2))} <span style="color:var(--muted)">${s.no_model?'':'xG'}</span></span></div>
       <div class="card-body">
         <div class="teams"><div class="team"><b>${s.home_team||'Home'}</b></div><div class="vs">VS</div><div class="team"><b>${s.away_team||'Away'}</b></div></div>
         <div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);text-align:center">${s.home_team||''} vs ${s.away_team||''}</div>
         ${b? `<div class="best" style="background:linear-gradient(135deg, rgba(0,230,118,0.18), rgba(0,229,255,0.14));border:1px solid rgba(0,230,118,0.35);color:var(--accent);font-family:Outfit,JetBrains Mono,monospace;font-weight:800;letter-spacing:-0.01em">🔥 BEST: <span style="color:var(--cyan)">${b.market}</span> • <span style="color:var(--text);background:rgba(0,0,0,0.25);padding:2px 6px;border-radius:6px">${b.pick}</span> @${Number(b.odds).toFixed(2)} — <span style="background:var(--accent);color:#04120A;padding:2px 6px;border-radius:99px">+${b.edge}%</span> • ${b.conf.label} ${b.conf.score}%</div>` : `<div style="text-align:center;font-family:DM Sans,monospace;font-size:11px;color:var(--muted);padding:8px;background:rgba(255,255,255,0.03);border:1px dashed var(--border);border-radius:10px">— No edge &gt;5% — fair odds —</div>`}
         <div class="odds">
-          <div><label>TRUE H</label><strong>${Number(s.true_home||0).toFixed(2)}</strong><div style="font-size:9px;color:var(--muted)">book ${Number(s.bookie_home||0).toFixed(2)}</div></div>
+          <div><label>TRUE H</label><strong>${s.true_home!=null?Number(s.true_home).toFixed(2):'—'}</strong><div style="font-size:9px;color:var(--muted)">${s.bookie_home!=null?('book '+Number(s.bookie_home).toFixed(2)):'unpriced'}</div></div>
           <div><label>TRUE O</label><strong>${Number(s.true_over25||0).toFixed(2)}</strong><div style="font-size:9px;color:var(--muted)">book ${Number(s.bookie_over25||0).toFixed(2)}</div></div>
         </div>
         <div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--muted);text-align:center">Edges: H +${s.edge_home||0}% • O +${s.edge_over||0}% • BTTS +${s.edge_btts_yes||0}%</div>
@@ -1063,7 +1063,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v18.2';
+let BUILD_VERSION = 'v18.3';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
@@ -1537,18 +1537,18 @@ function renderXGTable(list){
   if(!list || !list.length){ el.innerHTML='<div class="empty">No fixtures — xG will appear after capture/scan</div>'; if(cnt) cnt.textContent=''; return; }
   if(cnt) cnt.textContent=list.length+' fixtures';
   const rows=list.map(f=>{
-    const hx=Number(f.home_xg||0), ax=Number(f.away_xg||0), tot=hx+ax;
-    const over = f.probs? (f.probs.over25*100).toFixed(0)+'%' : '—';
-    const btts = f.probs? (f.probs.btts_yes*100).toFixed(0)+'%' : '—';
-    const homeProb = f.probs? (f.probs.home_win*100).toFixed(0)+'%' : '—';
+    const hx=Number(f.home_xg||0), ax=Number(f.away_xg||0), tot=f.no_model?null:hx+ax;
+    const over = (f.probs&&!f.no_model)? (f.probs.over25*100).toFixed(0)+'%' : '—';
+    const btts = (f.probs&&!f.no_model)? (f.probs.btts_yes*100).toFixed(0)+'%' : '—';
+    const homeProb = (f.probs&&!f.no_model)? (f.probs.home_win*100).toFixed(0)+'%' : '—';
     const isPast = f.is_past;
     const result = f.result || (isPast && f.home_score!=null? f.home_score+'-'+f.away_score : '');
     const resultCell = isPast? `<b style="background:var(--warn);color:#000;padding:2px 6px;border-radius:99px;font-family:Bebas Neue,sans-serif">${result || 'FT'}</b>` : `<span style="color:var(--muted);font-size:11px">${f.kickoff? new Date(f.kickoff).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</span>`;
     return `<tr>
       <td><b style="font-family:Outfit,sans-serif">${f.home_team}</b> <span style="color:var(--muted)">vs</span> <b style="font-family:Outfit,sans-serif">${f.away_team}</b><div style="font-size:10px;color:var(--muted)">${f.league} • ${resultCell}</div></td>
-      <td style="text-align:center;color:var(--cyan)">${hx.toFixed(2)}</td>
-      <td style="text-align:center;color:var(--pink)">${ax.toFixed(2)}</td>
-      <td style="text-align:center;font-weight:800;color:var(--accent)">${tot.toFixed(2)}</td>
+      <td style="text-align:center;color:var(--cyan)">${f.no_model?'—':hx.toFixed(2)}</td>
+      <td style="text-align:center;color:var(--pink)">${f.no_model?'—':ax.toFixed(2)}</td>
+      <td style="text-align:center;font-weight:800;color:var(--accent)">${(tot==null)?'—':tot.toFixed(2)}</td>
       <td style="text-align:center">${homeProb}</td>
       <td style="text-align:center">${over}</td>
       <td style="text-align:center">${btts}</td>
