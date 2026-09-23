@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v18.4">
+<meta name="build-version" content="v18.5">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -156,7 +156,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.4</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.5</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" style="padding:6px 10px;font-size:11px" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);" title="Clear phone cache">↻ Reset</button>
@@ -404,7 +404,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.4"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.5"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null;
@@ -476,8 +476,11 @@ $('#provider').addEventListener('change',()=>{
 const RS15={AVG:1.35,HOME:1.12,AWAY:0.93,MIN_N:5,MAX_FIX:400,CHUNK:4,PACE:300,SUM_CAP:200};
 const RS15C={teams:{}};
 function esc15(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-function rs15SOFA(p){return fetch('https://api.sofascore.com/api/v1'+p,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
-function rs15ESPN(p){return fetch('https://site.web.api.espn.com'+p,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})['catch'](()=>{if(location.protocol!=='http:'&&location.protocol!=='https:')return null;return fetch('/espnw'+p,{headers:{'Accept':'application/json'}}).then(r=>r.ok?r.json():null)['catch'](()=>null);});}
+/* v18.5: flaky-network resilience - every API call retries 3x with backoff,
+   so a dropped request no longer empties the whole board */
+function rs15Retry(url,tries){return new Promise(function(res,rej){var att=0;function go(){att++;fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(res)['catch'](function(e){if(att<(tries||3))setTimeout(go,att*1500);else rej(e);});}go();});}
+function rs15SOFA(p){return rs15Retry('https://api.sofascore.com/api/v1'+p,3);}
+function rs15ESPN(p){return rs15Retry('https://site.web.api.espn.com'+p,3)['catch'](()=>{if(location.protocol!=='http:'&&location.protocol!=='https:')return null;return fetch('/espnw'+p,{headers:{'Accept':'application/json'}}).then(r=>r.ok?r.json():null)['catch'](()=>null);});}
 function rs15Books(d){
   const out=[];
   function of_(o){
@@ -938,7 +941,7 @@ async function capture(){
     fixtures=[];scanned=[];
     renderBoard([]);
     $('#sFixtures').textContent='0';
-    $('#status').innerHTML='No fixtures reachable right now — <span style="color:var(--accent)">tap 🌍 Capture again</span> (SofaScore may be briefly blocked on your network; ESPN is the fallback). Nothing is ever faked here: no demo data.';
+    $('#status').innerHTML='No fixtures reachable right now — <span style="color:var(--accent)">tap 🌍 Capture again</span>. Requests now retry automatically; if it still fails, switch between WiFi and mobile data (some networks block SofaScore; ESPN is the fallback). Nothing is ever faked here: no demo data.';
     toast('No live fixtures reachable — retry in a minute', false);
   }finally{
     try{ const b=document.getElementById('btnFetch'); if(b){ b.disabled=false; b.textContent='🌍 Capture Fixtures'; } }catch(e){}
@@ -1063,7 +1066,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v18.4';
+let BUILD_VERSION = 'v18.5';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
