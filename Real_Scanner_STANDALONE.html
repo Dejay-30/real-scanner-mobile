@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v18">
+<meta name="build-version" content="v18.1">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -156,7 +156,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.1</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" style="padding:6px 10px;font-size:11px" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);" title="Clear phone cache">↻ Reset</button>
@@ -404,7 +404,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.1"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null;
@@ -543,12 +543,16 @@ function rs15Mk(fx,odds,rh,ra){
   const bh=odds?r2(odds.o1):null,bd=odds?r2(odds.ox):null,ba=odds?r2(odds.o2):null;
   /* +EV ONLY when a real book price beats the FORM model's true odds */
   const eh=(basis==='FORM'&&bh!=null&&bh>th)?+(((bh-th)/th*100).toFixed(1)):0;
-  /* auto-prediction: the model's most likely outcome, on every fixture */
-  let pk='home_win',pl='HOME WIN';
-  if(p.draw>=p[pk]){pk='draw';pl='DRAW';}
-  if(p.away_win>=p[pk]){pk='away_win';pl='AWAY WIN';}
+  /* v18.1: prediction ONLY with real input (book price or form ratings).
+     No data -> no prediction. Never a manufactured identical pick. */
+  let pk=null,pl=null;
+  if(odds||(rh&&ra)){
+    pk='home_win';pl='HOME WIN';
+    if(p.draw>=p[pk]){pk='draw';pl='DRAW';}
+    if(p.away_win>=p[pk]){pk='away_win';pl='AWAY WIN';}
+  }
   return {id:String(fx.id),league:fx.league||'Football',home_team:fx.home,away_team:fx.away,
-    pred:{pick:pk,label:pl,prob:p[pk],basis:basis},
+    pred:pk?{pick:pk,label:pl,prob:p[pk],basis:basis}:null,
     kickoff:fx.ts?new Date(fx.ts*1000).toISOString():new Date().toISOString(),
     home_xg:+lam.lh.toFixed(2),away_xg:+lam.la.toFixed(2),probs:p,
     true_home:th,true_draw:td,true_away:ta,
@@ -975,7 +979,7 @@ function renderBoard(list){
     const topEdge = Math.max(eh,eo,eb);
     const flag = hasAny ? `<div class="instant-flag">⚡ +${topEdge}% INSTANT +EV</div>` : '';
     const pe=wlMap[String(f.id)];
-    const predChip=(f.pred?('<div class="tiny" style="margin:2px 0;font-family:JetBrains Mono,monospace">🔮 '+f.pred.label+' '+Math.round((f.pred.prob||0)*100)+'%'+(f.pred.basis!=='FORM'?' <span style="opacity:.6">(mkt)</span>':'')+(pe&&pe.wl==='W'?' <b style="color:#00E676">✅ W</b>':(pe&&pe.wl==='L'?' <b style="color:#FF5C7A">❌ L</b>':''))+'</div>'):'');
+    const predChip=(f.pred?('<div class="tiny" style="margin:2px 0;font-family:JetBrains Mono,monospace">🔮 '+f.pred.label+' '+Math.round((f.pred.prob||0)*100)+'%'+(f.pred.basis!=='FORM'?' <span style="opacity:.6">(mkt)</span>':'')+(pe&&pe.wl==='W'?' <b style="color:#00E676">✅ W</b>':(pe&&pe.wl==='L'?' <b style="color:#FF5C7A">❌ L</b>':''))+'</div>'):('<div class="tiny" style="margin:2px 0;font-family:JetBrains Mono,monospace;opacity:.55">&#128302; no prediction yet — no book price or form data</div>'));
     return `
     <div class="card ${hasAny?'edge':''}" style="${hasAny? 'border-color:rgba(0,230,118,0.35)':''}">
       ${flag}
@@ -1039,7 +1043,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v18';
+let BUILD_VERSION = 'v18.1';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
