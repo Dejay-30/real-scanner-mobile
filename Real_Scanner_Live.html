@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v18.9">
+<meta name="build-version" content="v19.0">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -158,23 +158,36 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 .menu-item:hover{background:rgba(255,255,255,.05)}
 .menu-item .mi-sub{display:block;font-size:11px;font-weight:400;color:var(--muted)}
 .menu-badge{margin-left:auto;background:linear-gradient(135deg,#00E676,#2D7DFF);color:#04120A;border-radius:99px;padding:2px 8px;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:800}
+.tool-dot{margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--muted);opacity:.35;flex-shrink:0}
+.tool-dot.on{background:var(--accent);opacity:1;box-shadow:0 0 6px var(--accent)}
 
 </style>
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v18.9</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v19.0</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" id="btnMenu" onclick="toggleMenu()" aria-haspopup="menu" style="padding:7px 14px;font-weight:800;letter-spacing:.04em">☰ Menu</button>
   </div>
 </div>
 <div class="menu-panel" id="menuPanel">
+<div id="menuMainList">
   <a class="menu-item" id="btnBackJap" href="https://dejay-30.github.io/james-ai-predictor/" title="Back to James AI Predictor">🔙 Return<span class="mi-sub">back to James AI Predictor</span></a>
   <button class="menu-item" id="betslipBtn" onclick="toggleBetslip();closeMenu();">🎫 Betslip<span class="menu-badge" id="betslipCount">0</span></button>
   <button class="menu-item" onclick="openSettings();closeMenu();">⚙️ API Settings<span class="mi-sub">keys &amp; data sources</span></button>
   <button class="menu-item" onclick="try{forceUnstick(); localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true);">↻ Reset Cache<span class="mi-sub">fixes a stuck old version</span></button>
   <button class="menu-item" id="miClear" onclick="clearBoard()">🧹 Clear Board<span class="mi-sub">empty the fixtures column</span></button>
+  <button class="menu-item" onclick="menuTools()">🧰 Tools &amp; Tables<span class="mi-sub">scanner · board · xG · history · leaderboard</span></button>
+</div>
+<div id="menuToolsList" style="display:none">
+  <button class="menu-item" style="color:var(--muted)" onclick="menuMain()">🔙 Back to menu</button>
+  <button class="menu-item" onclick="toggleTool('tsScanner')">⚡ Market Scanner<span class="mi-sub">best +EV right now</span><span class="tool-dot" data-tooldot="tsScanner"></span></button>
+  <button class="menu-item" onclick="toggleTool('tsBoard')">📋 Active Board<span class="mi-sub">today's fixtures</span><span class="tool-dot" data-tooldot="tsBoard"></span></button>
+  <button class="menu-item" onclick="toggleTool('tsXG')">📊 xG Table<span class="mi-sub">expected goals per fixture</span><span class="tool-dot" data-tooldot="tsXG"></span></button>
+  <button class="menu-item" onclick="toggleTool('tsHistory')">📜 Match History &amp; Tracker<span class="mi-sub">results · profit · ROI</span><span class="tool-dot" data-tooldot="tsHistory"></span></button>
+  <button class="menu-item" onclick="toggleTool('tsLeaderboard')">🏆 Performance Leaderboard<span class="mi-sub">hit rate · profit by league</span><span class="tool-dot" data-tooldot="tsLeaderboard"></span></button>
+  <button class="menu-item" onclick="toggleTool('tsManual')">✏️ Manual Fixture Entry<span class="mi-sub">no key · no API needed</span><span class="tool-dot" data-tooldot="tsManual"></span></button>
 </div>
 </div>
 
@@ -209,7 +222,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
     </div>
   </div>
 
-  <div class="panel" style="margin-top:12px;border:1px dashed var(--border2);background:rgba(20,26,48,0.5)">
+  <div class="panel" id="tsManual" style="display:none;margin-top:12px;border:1px dashed var(--border2);background:rgba(20,26,48,0.5)">
     <h3 style="display:flex;justify-content:space-between;align-items:center">✏️ MANUAL FIXTURE ENTRY <span style="font-size:10px;color:var(--accent);border:1px solid rgba(0,230,118,0.25);padding:3px 8px;border-radius:99px">NO KEY • NO API NEEDED</span></h3>
     <p style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted)">Add any real fixture yourself when live API is empty/off-season — computes Poisson true odds instantly. Fills the scanner without any API.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -267,6 +280,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
   </div>
 
   <!-- (1) MARKET SCANNER — Best +EV Right Now + instant flag -->
+  <div class="tool-sec" id="tsScanner" style="display:none">
   <div class="section-head market">
     <div>
       <h3>⚡ MARKET SCANNER <em>— Best +EV Right Now</em> <span style="background:linear-gradient(135deg,#00E676,#00E5FF);color:#04120A;font-family:JetBrains Mono,monospace;font-size:10px;font-weight:800;padding:4px 8px;border-radius:99px;animation:flagPulse 1.5s infinite">⚡ INSTANT +EV</span></h3>
@@ -278,8 +292,10 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
     </div>
   </div>
   <div id="scanResults" class="board"><div class="empty" style="grid-column:1/-1">⏳ Waiting for fixtures → auto-scan will run <span style="color:var(--accent)">⚡</span><br><span style="font-size:11px;color:var(--muted)">Or tap <b>🔍 Scan +EV</b> after fixtures load</span></div></div>
+</div>
 
   <!-- (2) ACTIVE BOARD — Latest day's fixtures -->
+  <div class="tool-sec" id="tsBoard" style="display:none">
   <div class="section-head active">
     <div>
       <h3>📋 ACTIVE BOARD <em>— Latest Day's Fixtures</em></h3>
@@ -291,8 +307,10 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
     </div>
   </div>
   <div id="board" class="board"><div class="empty" style="grid-column:1/-1">⏳ Auto-pulling today's fixtures…<br><span style="font-size:11px;color:var(--muted)">If this stays, tap <b>🌍 Capture Fixtures</b> or <b>↻ Reset</b> above — phone data must be on</span></div></div>
+</div>
 
   <!-- xG Table -->
+  <div class="tool-sec" id="tsXG" style="display:none">
   <div class="section-head" style="--accent-grad: linear-gradient(90deg,#FF4081,#FFAB00); border-color:rgba(255,64,129,0.25); margin-top:18px">
     <div>
       <h3>📊 xG TABLE <em>— Expected Goals</em></h3>
@@ -307,7 +325,10 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
     <div id="xgBody" style="overflow-x:auto"><div class="empty">No fixtures — xG will appear after capture/scan</div></div>
   </div>
 
+</div>
+
   <!-- (3) MATCH HISTORY — Full Market Ledger -->
+  <div class="tool-sec" id="tsHistory" style="display:none">
   <div class="section-head ledger">
     <div>
       <h3>📜 MATCH HISTORY <em>— Full Market Ledger</em></h3>
@@ -342,8 +363,11 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
     </div>
   </div>
 
+</div>
+
   <!-- Performance Leaderboard -->
-  <div class="tracker-wrap" id="leaderboardWrap">
+  <div class="tool-sec" id="tsLeaderboard" style="display:none">
+<div class="tracker-wrap" id="leaderboardWrap">
     <div class="tracker-head">
       <h3 style="font-family:Space Grotesk,sans-serif;font-size:15px;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;background:var(--warn);border-radius:50%;box-shadow:0 0 8px var(--warn)"></span> Performance Leaderboard</h3>
       <div style="display:flex;gap:6px">
@@ -374,6 +398,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
       </div>
     </div>
   </div>
+</div>
 
   <div style="text-align:center;margin:20px 0;font-family:JetBrains Mono,monospace;font-size:11px;color:var(--dim)">Real Scanner <span id="footerVersion">v14</span> • auto-pull • Poisson true odds vs live bookie odds • No virtuals • Port Harcourt 2026 • <span id="footerDate" style="color:var(--muted)"></span><br><a href="#" onclick="try{localStorage.clear();sessionStorage.clear(); if('caches' in window) caches.keys().then(k=>k.forEach(n=>caches.delete(n))); if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));}catch(e){} location.reload(true); return false;" style="color:var(--muted);text-decoration:underline;font-size:10px">Reset app / clear phone cache</a> • <span style="font-size:10px">If fixtures don't pull, tap Reset then reload</span></div>
 </div>
@@ -416,10 +441,10 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v18.9"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v19.0"}</script>
 <script>
 const $=s=>document.querySelector(s);
-let fixtures=[], scanned=[], autoTimer=null;
+let fixtures=[], scanned=[], autoTimer=null, rs15SweepBusy=false, RS15BOARDMANUAL=false;
 // --- server-preloaded fixtures (auto-pull everything) ---
 try{
   const preEl=document.getElementById('preload');
@@ -490,7 +515,7 @@ const RS15C={teams:{}};
 function esc15(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 /* v18.5: flaky-network resilience - every API call retries 3x with backoff,
    so a dropped request no longer empties the whole board */
-function rs15Retry(url,tries){return new Promise(function(res,rej){var att=0;function go(){att++;fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(res)['catch'](function(e){if(att<(tries||3))setTimeout(go,att*1500);else rej(e);});}go();});}
+function rs15Retry(url,tries){return new Promise(function(res,rej){var att=0;function go(){att++;fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(res)['catch'](function(e){if(att<(tries||3))setTimeout(go,att*900);else rej(e);});}go();});}
 /* v18.6: relay fallback - some networks (carriers) block the data hosts
    outright; r.jina.ai relays the same public JSON and is CORS-open */
 const RS15NET={espnUntil:0,sofaUntil:0};
@@ -501,7 +526,7 @@ function rs15Fetch(kind,url,tries){
 }
 function rs15Jina(url){return fetch('https://r.jina.ai/'+url,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(j=>{const c=(((j||{}).data)||{}).content;return c?JSON.parse(c):null;});}
 function rs15SOFA(p){return rs15Fetch('sofa','https://api.sofascore.com/api/v1'+p,2)['catch'](()=>rs15Jina('https://api.sofascore.com/api/v1'+p));}
-function rs15ESPN(p){return rs15Fetch('espn','https://site.web.api.espn.com'+p,3)['catch'](()=>rs15Jina('https://site.web.api.espn.com'+p))['catch'](()=>{if(location.protocol!=='http:'&&location.protocol!=='https:')return null;return fetch('/espnw'+p,{headers:{'Accept':'application/json'}}).then(r=>r.ok?r.json():null)['catch'](()=>null);});}
+function rs15ESPN(p){return rs15Fetch('espn','https://site.web.api.espn.com'+p,2)['catch'](()=>rs15Jina('https://site.web.api.espn.com'+p))['catch'](()=>{if(location.protocol!=='http:'&&location.protocol!=='https:')return null;return fetch('/espnw'+p,{headers:{'Accept':'application/json'}}).then(r=>r.ok?r.json():null)['catch'](()=>null);});}
 function rs15Books(d){
   const out=[];
   function of_(o){
@@ -536,6 +561,16 @@ function rs15Fit(pH,pD,pA){
   for(i=0;i<24;i++){T=(lo+hi)/2;sp=splitFor(T);const pr=rs15Grid(T*sp,T*(1-sp));if(pr.draw>pD)lo=T;else hi=T;}
   T=(lo+hi)/2;sp=splitFor(T);
   return {lh:T*sp,la:T*(1-sp)};
+}
+/* v19: ESPN competitors carry real last-5 form (e.g. 'WWDLW') — build the
+   FORM model from it when SofaScore last-10 ratings aren't reachable, so
+   true-odds vs DraftKings edges (+EV) compute on every network */
+function rs15FormRatings(form){
+  const t=String(form||'').toUpperCase().replace(/[^WDL]/g,'');
+  if(t.length<3)return null;
+  let pts=0;for(let i=0;i<t.length;i++){pts+=t.charAt(i)==='W'?3:(t.charAt(i)==='D'?1:0);}
+  const m=(pts/(t.length*3)-0.4167)/0.4167;
+  return {atk:1+0.24*m,def:1-0.20*m,n:t.length};
 }
 function rs15Ratings(tid){
   if(tid==null)return Promise.resolve(null);
@@ -575,7 +610,7 @@ function rs15Mk(fx,odds,rh,ra){
     if(p.draw>=p[pk]){pk='draw';pl='DRAW';}
     if(p.away_win>=p[pk]){pk='away_win';pl='AWAY WIN';}
   }
-  return {id:String(fx.id),league:fx.league||'Football',home_team:fx.home,away_team:fx.away,
+  return {id:String(fx.id),league:fx.league||'Football',home_team:fx.home,away_team:fx.away,home_form:fx.home_form||null,away_form:fx.away_form||null,
     pred:pk?{pick:pk,label:pl,prob:p[pk],basis:basis}:null,
     kickoff:fx.ts?new Date(fx.ts*1000).toISOString():new Date().toISOString(),
     home_xg:(odds||(rh&&ra))?+lam.lh.toFixed(2):null,away_xg:(odds||(rh&&ra))?+lam.la.toFixed(2):null,probs:(odds||(rh&&ra))?p:null,no_model:!(odds||(rh&&ra)),
@@ -621,10 +656,10 @@ async function rs15EspnDay(dateStr){
   ((((d||{}).events)||[])).forEach(e=>{
     const comps=((e.competitions||[{}])[0]);
     const comps2=(comps.competitors)||[];
-    let hm=null,aw=null,hs=null,as=null;
+    let hm=null,aw=null,hs=null,as=null,hForm=null,aForm=null;
     comps2.forEach(c=>{
-      if(c.homeAway==='home'){hm=((c.team||{}).displayName)||null;hs=parseGoalSafe(c.score);}
-      else if(c.homeAway==='away'){aw=((c.team||{}).displayName)||null;as=parseGoalSafe(c.score);}
+      if(c.homeAway==='home'){hm=((c.team||{}).displayName)||null;hs=parseGoalSafe(c.score);hForm=c.form||null;}
+      else if(c.homeAway==='away'){aw=((c.team||{}).displayName)||null;as=parseGoalSafe(c.score);aForm=c.form||null;}
     });
     if(!hm||!aw)return;
     const state=((((e.status||{}).type)||{}).state)||'';
@@ -645,7 +680,7 @@ async function rs15EspnDay(dateStr){
       if(c1>1&&cx>1&&c2>1)odds={o1:c1,ox:cx,o2:c2,n:1};
     }
     const lgName=(e.league&&e.league.name)||(e.leagues&&e.leagues[0]&&e.leagues[0].name)||'Football';
-    out.push({id:e.id,home:hm,away:aw,hid:null,aid:null,lg:lgName,
+    out.push({id:e.id,home:hm,away:aw,hid:null,aid:null,lg:lgName,home_form:hForm,away_form:aForm,
       ts:e.date?Math.floor(Date.parse(e.date)/1000):null,
       status:state,is_past:state==='post',
       result:state==='post'&&hs!=null&&as!=null?(hs+'-'+as):'',
@@ -675,6 +710,9 @@ async function rs15Enrich(list,prog){
         if(fx.hid!=null||fx.aid!=null){
           const rr=await Promise.all([rs15Ratings(fx.hid),rs15Ratings(fx.aid)]);
           rh=rr[0];ra=rr[1];
+        }else if(fx.home_form||fx.away_form){
+          /* v19: ESPN form strings -> FORM basis (real recent-form data) */
+          rh=rs15FormRatings(fx.home_form);ra=rs15FormRatings(fx.away_form);
         }
         const row=rs15Mk(fx,odds,rh,ra);
         row._fx=fx;row._rh=rh;row._ra=ra;   /* kept for cross-fill odds swaps */
@@ -741,9 +779,10 @@ async function rs15EspnSummaryOdds(eid){
 }
 /* v17: last-resort pricing pass — scoreboard cross-fill first, then a paced
    per-event summary sweep for whatever is still unpriced (popular first) */
-async function rs15EspnPrice(rows,dateStr){
+async function rs15EspnPrice(rows,dateStr,opt){
+  opt=opt||{};
   let maps=null;
-  try{ maps=await rs15EspnMaps(dateStr); }catch(e){}
+  if(!opt.skipMaps){ try{ maps=await rs15EspnMaps(dateStr); }catch(e){} }
   if(maps)rows=rs15CrossFill(rows,maps.odds);
   const targets=[];
   rows.forEach(r=>{
@@ -764,6 +803,7 @@ async function rs15EspnPrice(rows,dateStr){
       const idx=rows.indexOf(g[0]);
       if(idx>=0)rows[idx]=rs15Mk(g[0]._fx,g[1],g[0]._rh,g[0]._ra);
     });
+    if(opt.onChunk){ try{ opt.onChunk(false); }catch(e){} }
     if(i+CH<targets.length)await new Promise(r2=>setTimeout(r2,PC));
   }
   return rows;
@@ -798,6 +838,7 @@ function rs15CrossFill(rows,map){
   });
 }
 async function rs15Direct(dateStr,prov){
+  let rs15SofaListOk=false;
   const today=rs15LocalDate(0);
   const wantPast=!!dateStr&&dateStr<today;
   const useDate=dateStr||today;
@@ -811,12 +852,18 @@ async function rs15Direct(dateStr,prov){
       if(list.length){
         let fx=await rs15Enrich(list,(d,t)=>{const st=document.getElementById('status');if(st)st.textContent='Pricing + rating '+d+' / '+t+' fixtures…';});
         if(fx.length){
-          /* anything SofaScore couldn't price -> try ESPN DraftKings by name */
-          if(fx.some(r=>r.bookie_home==null)){
-            try{ fx=await rs15EspnPrice(fx,useDate); }catch(e){}
-          }
-          fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
-          return {fixtures:fx,provider:'SofaScore',note:'every fixture · multi-book averaged odds · last-10 team ratings'};
+          rs15SofaListOk=true;
+          const out={fixtures:fx,provider:'SofaScore',note:'every fixture · multi-book averaged odds · last-10 team ratings'};
+          /* v19: the DraftKings top-up sweep runs in the background — the board
+             renders immediately and prices stream in as they arrive */
+          out.cont=async function(onChunk){
+            if(out.fixtures.some(r=>r.bookie_home==null)){
+              try{ out.fixtures=await rs15EspnPrice(out.fixtures,useDate,{onChunk:onChunk}); }catch(e){}
+            }
+            out.fixtures.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+            if(onChunk){ try{ onChunk(true); }catch(e){} }
+          };
+          return out;
         }
       }
     }catch(e){console.warn('sofa direct failed',e.message);}
@@ -828,39 +875,44 @@ async function rs15Direct(dateStr,prov){
   if(elist.length){
     let fx=await rs15Enrich(elist.map(f=>Object.assign({src:'espn'},f)),null);
     if(fx.length){
-      /* anything ESPN couldn't price -> try SofaScore multi-book by name */
-      if(fx.some(r=>r.bookie_home==null)){
+      /* anything ESPN couldn't price -> try SofaScore multi-book by name
+         (skipped when SofaScore already came back empty for the day) */
+      if(rs15SofaListOk&&fx.some(r=>r.bookie_home==null)){
         try{
           const need=fx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
           fx=rs15CrossFill(fx,await rs15SofaOddsForNames(useDate,need));
         }catch(e){}
       }
-      /* still unpriced -> ESPN per-event summary sweep (real DraftKings 1X2) */
-      if(fx.some(r=>r.bookie_home==null)){
-        try{ fx=await rs15EspnPrice(fx,useDate); }catch(e){}
-      }
-      /* v18.2: thin pricing (off-peak) -> append tomorrow's not-started fixtures,
-         priced by the same three layers, so the board always carries real prices */
-      if(fx.filter(r=>r.bookie_home!=null).length<15&&!wantPast){
-        try{
-          const tmr=rs15LocalDate(1);
-          const tlist=(await rs15EspnDay(tmr)).filter(f=>f.status!=='post'&&f.status!=='in').slice(0,150);
-          if(tlist.length){
-            let tfx=await rs15Enrich(tlist.map(f=>Object.assign({src:'espn'},f)),null);
-            if(tfx.some(r=>r.bookie_home==null)){
-              try{
-                const need=tfx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
-                tfx=rs15CrossFill(tfx,await rs15SofaOddsForNames(tmr,need));
-              }catch(e){}
+      const out={fixtures:fx,provider:'ESPN',note:'every league · DraftKings prices · ESPN form model'};
+      /* v19: render NOW — the DraftKings summary sweep and the tomorrow
+         top-up run in the background so the wait is seconds, not minutes */
+      out.cont=async function(onChunk){
+        if(out.fixtures.some(r=>r.bookie_home==null)){
+          try{ out.fixtures=await rs15EspnPrice(out.fixtures,useDate,{skipMaps:true,onChunk:onChunk}); }catch(e){}
+        }
+        /* v18.2: thin pricing (off-peak) -> append tomorrow's not-started fixtures */
+        if(out.fixtures.filter(r=>r.bookie_home!=null).length<15&&!wantPast){
+          try{
+            const tmr=rs15LocalDate(1);
+            const tlist=(await rs15EspnDay(tmr)).filter(f=>f.status!=='post'&&f.status!=='in').slice(0,150);
+            if(tlist.length){
+              let tfx=await rs15Enrich(tlist.map(f=>Object.assign({src:'espn'},f)),null);
+              if(rs15SofaListOk&&tfx.some(r=>r.bookie_home==null)){
+                try{
+                  const need=tfx.filter(r=>r.bookie_home==null).map(r=>rs15Norm(r.home_team)+'|'+rs15Norm(r.away_team));
+                  tfx=rs15CrossFill(tfx,await rs15SofaOddsForNames(tmr,need));
+                }catch(e){}
+              }
+              if(tfx.some(r=>r.bookie_home==null)){ try{ tfx=await rs15EspnPrice(tfx,tmr,{onChunk:onChunk}); }catch(e){} }
+              tfx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+              out.fixtures=out.fixtures.concat(tfx);
             }
-            if(tfx.some(r=>r.bookie_home==null)){ try{ tfx=await rs15EspnPrice(tfx,tmr); }catch(e){} }
-            tfx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
-            fx=fx.concat(tfx);
-          }
-        }catch(e){}
-      }
-      fx.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
-      return {fixtures:fx,provider:'ESPN',note:'every league · DraftKings prices'};
+          }catch(e){}
+        }
+        out.fixtures.forEach(r=>{delete r._fx;delete r._rh;delete r._ra;});
+        if(onChunk){ try{ onChunk(true); }catch(e){} }
+      };
+      return out;
     }
   }
   throw new Error('no live fixtures reachable from either source');
@@ -959,6 +1011,25 @@ async function capture(){
     try{ updateLeagueChips(fixtures); }catch(e){}
     setTimeout(scan,400);
     setTimeout(autoSettle,2500);
+    try{ if(!RS15BOARDMANUAL) showTool('tsBoard'); }catch(e){}
+    if(typeof res.cont==='function'&&!rs15SweepBusy){
+      rs15SweepBusy=true;
+      (async function(){
+        try{
+          await res.cont(function(fin){
+            fixtures=res.fixtures||fixtures;
+            try{ const pr=fixtures.filter(f=>f.bookie_home!=null).length;
+              $('#status').textContent=fin?('✅ '+pr+' priced · '+fixtures.length+' fixtures — real prices only'):('💵 '+pr+' / '+fixtures.length+' priced — streaming real prices…'); }catch(e){}
+            try{ if(!dateVal) logPredictions(fixtures); }catch(e){}
+            try{ renderBoard(fixtures); }catch(e){}
+            try{ renderXGTable(fixtures); }catch(e){}
+            try{ updateLeagueChips(fixtures); }catch(e){}
+            setTimeout(scan,50);
+          });
+        }catch(e){}
+        rs15SweepBusy=false;
+      })();
+    }
   }catch(e){
     fixtures=[];scanned=[];
     renderBoard([]);
@@ -1034,7 +1105,7 @@ function renderBoard(list){
         <div class="teams"><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.home_team||'Home'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div><div class="vs" style="font-family:Bebas Neue,sans-serif;font-size:12px;background:var(--warn);color:#000;border:none">VS</div><div class="team"><div class="icon" style="background:linear-gradient(135deg,var(--card2),var(--bg));border-color:var(--border2)">⚽</div><div><b style="font-family:Outfit,Space Grotesk,sans-serif;font-weight:800;letter-spacing:-0.02em">${f.away_team||'Away'}</b><div style="font-family:DM Sans,sans-serif;font-size:10px;color:var(--muted);letter-spacing:0.04em">${f.league||''}</div></div></div></div>
         <div style="display:flex;gap:6px;font-family:JetBrains Mono,monospace;font-size:10px;justify-content:center"><span style="color:var(--blue);font-weight:700">True H ${th?th.toFixed(2):'—'}</span><span style="color:var(--muted)">•</span><span style="color:var(--accent);font-weight:700">O ${to2?to2.toFixed(2):'—'}</span><span style="color:var(--muted)">•</span><span style="color:var(--pink);font-weight:700">BTTS ${tb?tb.toFixed(2):'—'}</span></div>
         <div class="odds">
-          <div class="${hasH?'edge':''}"><label>HOME ${bh!=null?('@'+bh.toFixed(2)):'(unpriced)'}</label><strong>${bh!=null?bh.toFixed(2):'—'}</strong><div style="font-size:10px;color:var(--muted)">true ${th?th.toFixed(2):'—'} · ${f.basis==='FORM'?'🟢 FORM':'⚪ MKT'}${f.n_books?(' · '+f.n_books+' books'):''}</div></div>
+          <div class="${hasH?'edge':''}"><label>HOME ${bh!=null?('@'+bh.toFixed(2)):'(unpriced)'}</label><strong>${bh!=null?bh.toFixed(2):'—'}</strong><div style="font-size:10px;color:var(--muted)">true ${th?th.toFixed(2):'—'} · ${f.basis==='FORM'?'🟢 FORM':'⚪ MKT'}${f.home_form?(' · '+String(f.home_form).slice(-5)):''}${f.n_books?(' · '+f.n_books+' books'):''}</div></div>
           <div><label>AWAY</label><strong>${(f.bookie_away!=null)?Number(f.bookie_away).toFixed(2):'—'}</strong><div style="font-size:10px;color:var(--muted)">true ${Number(f.true_away||0)?Number(f.true_away).toFixed(2):'—'}</div></div>
         </div>
         <div class="odds">
@@ -1088,7 +1159,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v18.9';
+let BUILD_VERSION = 'v19.0';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
@@ -1665,7 +1736,24 @@ else if(/^\/real-scanner(\.html)?\/?$/.test(p))href='/';
 else if(location.protocol==='http:'&&/^(localhost|127\.)/.test(location.hostname))href='/';
 b.setAttribute('href',href);})();
 /* v18.9: header menu - every topbar action collapses into one place */
-function toggleMenu(){var m=document.getElementById('menuPanel');if(!m)return;if(m.classList.contains('open')){m.classList.remove('open');}else{m.classList.add('open');}}
+function toggleMenu(){var m=document.getElementById('menuPanel');if(!m)return;if(m.classList.contains('open')){m.classList.remove('open');}else{try{menuMain();}catch(e){}m.classList.add('open');}}
+function menuTools(){var a=document.getElementById('menuMainList'),b=document.getElementById('menuToolsList');if(a)a.style.display='none';if(b)b.style.display='block';}
+function menuMain(){var a=document.getElementById('menuMainList'),b=document.getElementById('menuToolsList');if(b)b.style.display='none';if(a)a.style.display='block';}
+function toggleTool(id){
+  var el=document.getElementById(id);if(!el)return;
+  var show=el.style.display==='none';
+  el.style.display=show?'block':'none';
+  if(id==='tsBoard'&&!show)RS15BOARDMANUAL=true;
+  if(show){try{el.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}}
+  syncToolDots();closeMenu();
+}
+function showTool(id){var el=document.getElementById(id);if(!el)return;if(el.style.display==='none'){el.style.display='block';syncToolDots();}}
+function syncToolDots(){
+  ['tsScanner','tsBoard','tsXG','tsHistory','tsLeaderboard','tsManual'].forEach(function(id){
+    var el=document.getElementById(id);var d=document.querySelector('[data-tooldot="'+id+'"]');
+    if(!el||!d)return;if(el.style.display!=='none')d.classList.add('on');else d.classList.remove('on');
+  });
+}
 function closeMenu(){var m=document.getElementById('menuPanel');if(m)m.classList.remove('open');}
 function clearBoard(){
   closeMenu();
