@@ -6,7 +6,7 @@
 <title>Real Fixtures Scanner — Live Odds +EV</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="build-version" content="v19.1">
+<meta name="build-version" content="v19.2">
 <meta name="server-date" content="">
 <meta name="theme-color" content="#00E676">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -165,7 +165,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v19.1</b></p></div></div>
+  <div class="brand"><div class="brand-mark">⚡</div><div><h1>Real <span>Scanner</span></h1><p>LIVE FIXTURES + ODDS → +EV SCAN · <b id="brandVer" style="color:var(--accent)">v19.2</b></p></div></div>
     <div style="display:flex;gap:8px;align-items:center">
     <div class="live-dot"><i></i> LIVE</div>
     <button class="btn" id="btnMenu" onclick="toggleMenu()" aria-haspopup="menu" style="padding:7px 14px;font-weight:800;letter-spacing:.04em">☰ Menu</button>
@@ -441,7 +441,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-ser
 
 <div class="toast" id="toast"></div>
 <script id="preload" type="application/json">[]</script>
-<script id="server-meta" type="application/json">{"server_date":"","build_version":"v19.1"}</script>
+<script id="server-meta" type="application/json">{"server_date":"","build_version":"v19.2"}</script>
 <script>
 const $=s=>document.querySelector(s);
 let fixtures=[], scanned=[], autoTimer=null, rs15SweepBusy=false, RS15BOARDMANUAL=false, rs15CapSeq=0, rs15PendingCont=null;
@@ -528,7 +528,11 @@ function rs15Fetch(kind,url,tries){
 /* v19.1: no single public relay is reliable long-term (r.jina.ai started
    demanding keys) - try several in order; each may return the raw JSON or
    an envelope wrapping it */
-function rs15RelayRaw(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(t=>{try{return JSON.parse(t);}catch(e){throw new Error('bad json');}});}
+function rs15RelayRaw(u){
+  const ctl=('AbortController' in window)?new AbortController():null;
+  if(ctl)setTimeout(function(){try{ctl.abort();}catch(e){}},5000);
+  return fetch(u,{headers:{'Accept':'application/json'},signal:ctl?ctl.signal:undefined}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(function(x){try{return JSON.parse(x);}catch(e){throw new Error('bad json');}});
+}
 function rs15RelayAttempt(u){return rs15RelayRaw(u).then(j=>{if(j&&j.data&&typeof j.data.content==='string'){try{return JSON.parse(j.data.content);}catch(e){return null;}}if(j&&typeof j.contents==='string'){try{return JSON.parse(j.contents);}catch(e){return null;}}return j;});}
 function rs15Relay(url){
   const enc=encodeURIComponent(url);
@@ -890,7 +894,10 @@ async function rs15Direct(dateStr,prov){
   const useDate=dateStr||today;
   if(prov!=='espn'){
     try{
-      let list=await rs15SofaDay(useDate,wantPast);
+      let list=await Promise.race([
+        rs15SofaDay(useDate,wantPast),
+        new Promise(function(_,rej){setTimeout(function(){rej(new Error('sofa day timeout'));},11000);})
+      ]);
       if(!wantPast&&list.length<12&&useDate===today){
         const tmrw=await rs15SofaDay(rs15LocalDate(1),false).catch(()=>[]);
         const seen={};list=list.concat(tmrw.filter(f=>{const k=f.home+'|'+f.away;if(seen[k])return false;seen[k]=1;return true;}));
@@ -1237,7 +1244,7 @@ $('#btnAuto').addEventListener('click',()=>{
 refreshKeyStatus();
 // Auto-render preloaded fixtures instantly (no fetch needed) + detect stale date
 let SERVER_DATE = '';
-let BUILD_VERSION = 'v19.1';
+let BUILD_VERSION = 'v19.2';
 try{
   const metaEl=document.getElementById('server-meta');
   if(metaEl){
