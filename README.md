@@ -15,7 +15,7 @@
 
 ## 📲 Download the Android APK (direct)
 
-**[`Real-Scanner-v18.2.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v18.2.apk)** — debug build, no signing needed to install. **v18.2 = always-current shell (loads live version - last install ever).** Off-peak coverage (pulls tomorrow's priced fixtures when today is thin); honest predictions (never manufactured); every repo file now serves the current engine.
+**[`Real-Scanner-v18.3.apk`](https://dejay-30.github.io/real-scanner-mobile/Real-Scanner-v18.3.apk)** — debug build, no signing needed to install. **v18.3 = always-current shell (loads live version - last install ever).** Unpriced fixtures show honest dashes everywhere - identical baseline numbers removed from board, scan and xG table.
 
 On your phone: open the link → let it download → tap the file → allow *Install unknown apps* if asked. The app runs fullscreen with its own icon, auto-pulls every fixture on open, and the engine is identical to the web version at **https://dejay-30.github.io/real-scanner-mobile/**.
 
